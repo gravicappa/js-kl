@@ -1,7 +1,7 @@
 function shenjs_load_files() {
 	var dir = "/home/ramil/dev/shen/modules/javascript/"
 	var shen_src_js = ["vector-closures.js",
-										 "js-kl.js",
+										 "javascript.js",
 										 "core.js",
 										 "sys.js",
 										 "sequent.js",

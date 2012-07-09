@@ -3,4 +3,4 @@
                   [author: "Ramil Farkshatov"]
                   [license: "GPLv3+"]
                   [desc: "Javascript shen translator."]
-                  [load: "js-kl.shen"]])
+                  [load: "javascript.shen"]])
