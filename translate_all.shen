@@ -89,17 +89,20 @@
 
 (define dump-js
   Dir Src -> (let Dst (make-string "~A/~A.js" Dir (path-strip-extension
-                                                 (path-tail Src)))
+                                                    (path-tail Src)))
                   Kl (map (value kl-from-shen) (read-file Src))
-                  R (map (/. X (write-string (make-string "~R~%~%" X) 0 F))
-                         Kl)
-               (do (output "~A -> ~A~%" Src Dst)
-                   (js-dump-to-file Kl Dst))))
+                  T1 (output "== ~A -> ~A~%" Src Dst)
+               (js-dump-to-file Kl Dst)))
 
 (register-dumper js all dump-js)
 (dump-module javascript js cli (value dst-dir))
 
+(do (output "== Generating primitives~%") _)
+
 (call-with-install-flags
   -1 true (freeze (load (cn (value src-dir) "mkprim.shen"))))
+
+(do (output "== Translating Shen~%") _)
 (call-with-install-flags -1 true (freeze (map (function process-file)
                                               (value files))))
+(do (output "== DONE~%") _)

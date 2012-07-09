@@ -1,2 +1,2 @@
 load("load.js")
-shen_shen()
+shenjs_start_shen()

@@ -1,7 +1,7 @@
-Shen_tco_obj = function(fn) {this.fn = fn}
-
+Shenjs_freeze_obj = function(fn) {this.fn = fn}
 shen_fail_obj = new Object
 shenjs_globals = []
+shenjs_functions = []
 
 shen_counter_type = 0
 shen_type_func = --shen_counter_type
@@ -15,68 +15,88 @@ shen_type_error = --shen_counter_type
 shen_true = true
 shen_false = false
 
-function shenjs_call(x, args) {
+function shenjs_mkfunction(name, nargs, fn) {
+  var x = [shen_type_func, fn, nargs, [], name]
+  shenjs_functions[name] = x
+  return x
+}
+
+function shenjs_call_tail(x, args) {
   var j = 0, nargs = args.length
-  do {
+  for (;;) {
     if (typeof(x) == "function") {
       x = x([args[j++]])
     } else if (x[0] == shen_type_func) {
       var c = x[3], n = c.length, k = x[2], a
-      k = (k > n + nargs) ? n + nargs : k
-      a = new Array(k)
+      if (!j && !n && nargs <= k) {
+        a = args
+        j += nargs
+      } else {
+        k = (k > n + nargs) ? n + nargs : k
+        a = new Array(k)
 
-      for (var i = 0; i < n; ++i)
-        a[i] = c[i]
-      for (;i < k && j < nargs; ++j, ++i)
-        a[i] = args[j]
+        for (var i = 0; i < n; ++i)
+          a[i] = c[i]
+        for (;i < k && j < nargs; ++j, ++i)
+          a[i] = args[j]
+      }
       x = (x[1])(a)
     } else if (x[0] == shen_type_symbol) {
       x = shenjs_get_fn(x)
     } else
-      return shenjs_error(["shenjs_call: Wrong function: '" + x + "'"])
-    while (x instanceof Shen_tco_obj)
-      x = x.fn()
-  } while (j < nargs && x[0] == shen_type_func);
+      return shenjs_error("shenjs_call: Wrong function: '" + x + "'")
+    if (j >= nargs)
+      return x
+    while (typeof(x) == "function")
+      x = x()
+  }
+  return x
+}
+
+function shenjs_call(x, args) {
+  var x = shenjs_call_tail(x, args)
+  while (typeof(x) == "function")
+    x = x()
+  return x
+}
+
+function shenjs_unwind_tail(x) {
+  while(typeof(x) == "function")
+    x = x()
   return x
 }
 
 function shenjs_get_fn(x) {
   if (typeof(x) == "function")
-    return x
-	switch (x[0]) {
+    shenjs_error("passed function into get_fn")
+  switch (x[0]) {
+  case shen_type_func: return x
   case shen_type_symbol:
-    try {
-      return eval(shenjs_str_js_from_shen(x[1]))
-    } catch (e) {
-      try {
-        return eval(shenjs_str_js_from_shen("shen-" + x[1]))
-      } catch (e) {
-        shenjs_error(["Cannot find (|shen_)'" + x[1] + "'"])
-      }
-    }
+    var v = shenjs_functions["shen_" + x[1]]
+    if (v != undefined)
+      return v
+    v = shenjs_functions["shen_shen_" + x[1]]
+    if (v != undefined)
+      return v
+    shenjs_error("Cannot find '" + x[1] + "' or 'shen_" + x[1] + "'")
     return shen_fail_obj
-	case shen_type_func: return x
   }
   throw new Error("function " + shenjs_str_shen_from_js(x[1]) + " not found")
 }
 
-function shenjs_error(args) {
-  if (args.length < 1) return [shen_type_func, shenjs_error, 1, args]
-  if (shenjs_is_true(shenjs_globals['shen-*show-error-js*']))
-    shenjs_puts("# err: " + args[0] + "\n")
-  throw new Error(args[0]);
+function shenjs_error(s) {
+  if (shenjs_is_true(shenjs_globals['shen_shen-*show-error-js*']))
+    shenjs_puts("# err: " + s + "\n")
+  throw new Error(s);
   return shen_fail_obj
 }
 
-function shenjs_error_to_string(args) {
-  if (args.length < 1)
-		return [shen_type_func, shenjs_error_to_string, 1, args]
-  var s = args[0], stack = s.stack;
-  return (stack == undefined) ? ("" + s) : ("" + s + " " + stack);
+function shenjs_error_to_string(s) {
+  var stack = s.stack;
+  return (stack === undefined) ? ("" + s) : ("" + s + " " + stack);
 }
 
-function shenjs_get_time(args) {
-  if (args.length < 1) return [shen_type_func, shenjs_get_time, 1, args]
+function shenjs_get_time(x) {
   return (new Date()).getTime() / 1000.0
 }
 
@@ -104,20 +124,14 @@ function shenjs_equal_boolean(b, x) {
 }
 
 function shenjs_equal_function(f, x) {
-  return ((f.name.length > 0)
-           && (x instanceof Array)
-           && x[0] == shen_type_symbol
-           && x[1] == f.name)
+  return (x[0] == shen_type_symbol && f[0] == shen_type_func && x[1] == f[4])
 }
 
-function shenjs_$eq$(args) {
-  if (args.length < 2) return [shen_type_func, shenjs_$eq$, 2, args]
-  var x = args[0], y = args[1], tx = typeof(x), ty = typeof(y)
+function shenjs_$eq$(x, y) {
+  var tx = typeof(x), ty = typeof(y)
   if (tx != ty)
     return ((tx == "boolean" && shenjs_equal_boolean(x, y))
-            || (ty == "boolean" && shenjs_equal_boolean(y, x))
-            || (tx == "function" && shenjs_equal_function(x, y))
-            || (ty == "function" && shenjs_equal_function(y, x)))
+            || (ty == "boolean" && shenjs_equal_boolean(y, x)))
   switch (tx) {
   case "number":
   case "boolean":
@@ -126,18 +140,25 @@ function shenjs_$eq$(args) {
     return x == y;
 
   case "object":
-    if (((x instanceof Array) ^ (y instanceof Array))
-        || (x.length != y.length))
-      return false;
+    if (x == y)
+      return true
+
+    if ((x instanceof Array) ^ (y instanceof Array))
+      return false
+
+    if (shenjs_equal_function(x, y) || shenjs_equal_function(y, x))
+      return true
+    if (x.length != y.length)
+      return false
     if (x.length == 0)
-      return true;
+      return true
     if (x == shen_fail_obj && y == shen_fail_obj)
-      return true;
+      return true
     if (x[0] != y[0])
-      return false;
+      return false
     switch (x[0]) {
-    case shen_type_func: 
-      if (x[1] != y[1] || x[2] != y[2])
+    case shen_type_func:
+     if (x[1] != y[1] || x[2] != y[2])
         return false
       var n = x[3].length
       if (n != y[3].length)
@@ -148,17 +169,24 @@ function shenjs_$eq$(args) {
       return true
     case shen_type_symbol: return x[1] == y[1];
     case shen_type_cons:
-      var r = shenjs_call(shen_$eq$, [x[1], y[1]])
+      var r = shenjs_$eq$(x[1], y[1])
+      while (typeof(r) == "function")
+        r = r()
       if (!r)
         return false
-      return new Shen_tco_obj(function () {
-        return shenjs_call(shen_$eq$, [x[2], y[2]])
+      return (function() {
+        var r = shenjs_$eq$(x[2], y[2])
+        while (typeof(r) == "function")
+          r = r()
+        return r
       });
     case shen_type_stream_out:
     case shen_type_stream_in: return x[1] == y[1] && x[2] == y[2];
     default:
       for (var i = 1; i < x.length; ++i) {
-        var r = shenjs_call(shen_$eq$, [x[i], y[i]])
+        var r = shenjs_$eq$(x[i], y[i])
+        while (typeof(r) == "function")
+          r = r()
         if (!r)
           return false;
       }
@@ -169,10 +197,7 @@ function shenjs_$eq$(args) {
   }
 }
 
-function shenjs_empty$question$(args) {
-  if (args.length < 1)
-    return [shen_type_func, shenjs_empty$question$, 1, args]
-  var x = args[0]
+function shenjs_empty$question$(x) {
   return ((x instanceof Array) && !x.length)
 }
 
@@ -182,33 +207,22 @@ function shenjs_is_type(x, type) {
   return ((x instanceof Array) && x[0] == type)
 }
 
-function shenjs_boolean$question$(args) {
-  if (args.length < 1) 
-    return [shen_type_func, shenjs_boolean$question$, 1, args]
-  var x = args[0]
+function shenjs_boolean$question$(x) {
   return (typeof(x) == "boolean") || (shenjs_is_type(x, shen_type_symbol)
                                       && (x[1] == "true" || x[1] == "false"))
 }
 
-function shenjs_vector$question$(args) {
-  if (args.length < 1)
-    return [shen_type_func, shenjs_vector$question$, 1, args]
-  var x = args[0]
+function shenjs_vector$question$(x) {
   return ((x instanceof Array) && x[0] > 0)
 }
 
-function shenjs_absvector$question$(args) {
-  if (args.length < 1)
-    return [shen_type_func, shenjs_absvector$question$, 1, args]
-  var x = args[0]
+function shenjs_absvector$question$(x) {
   return ((x instanceof Array) && x.length > 0
           && ((typeof(x[0]) != "number")
               || x[0] >= 0 || x[0] <= shen_counter_type))
 }
 
-function shenjs_absvector(args) {
-  if (args.length < 1) return [shen_type_func, shenjs_absvector, 1, args]
-  var n = args[0]
+function shenjs_absvector(n) {
   var ret = new Array(n)
   for (var i = 0; i < n; ++i)
     ret[i] = shen_fail_obj
@@ -221,7 +235,7 @@ function dbg_princ(s, x) {
 }
 
 function dbg_print(s) {
-  if (shenjs_is_true(shenjs_globals['shen-*show-error-js*']))
+  if (shenjs_is_true(shenjs_globals['shen_shen-*show-error-js*']))
     shenjs_puts(s + "\n")
 }
 
@@ -233,35 +247,26 @@ function shenjs_is_true(x) {
 
 function shenjs_absvector_ref(x, i) {
   if (x.length <= i || i < 0)
-    shenjs_error(["out of range"])
+    shenjs_error("out of range")
   return x[i]
 }
 
 function shenjs_absvector_set(x, i, v) {
-  if (x.length <= i)
-    shenjs_error(["out of range"])
+  if (x.length <= i || i < 0)
+    shenjs_error("out of range")
   x[i] = v
   return x
 }
 
-function shenjs_value(args) {
-  if (args.length < 1) return [shen_type_func, shenjs_value, 1, args]
-  var s = args[0], x = shenjs_globals[s[1]]
-  if (x == undefined)
-    shenjs_error(["The variable " + s + " is unbound."])
+function shenjs_value(x) {
+  var y = shenjs_globals["shen_" + s[1]]
+  if (y === undefined)
+    shenjs_error("The variable " + x + " is unbound.")
   else
-    return x
+    return y
 }
 
-function shenjs_set(args) {
-  if (args.length < 2) return [shen_type_func, shenjs_set, 2, args]
-  var s = args[0]
-  return (shenjs_globals[s[1]] = args[1])
-}
-
-function shenjs_vector(args) {
-  if (args.length < 1) return [shen_type_func, shenjs_vector, 1, args]
-  var n = args[0]
+function shenjs_vector(n) {
   var r = new Array(n + 1)
   r[0] = n
   for (var i = 1; i <= n; ++i)
@@ -290,7 +295,7 @@ function shenjs_init_restricted () {
     "in", "super", "load", "print", "eval", "read", "readline", "write",
     "putstr", "let", "Array", "Object", "document"
   ];
-	var nwords = words.length;
+  var nwords = words.length;
   for (var i = 0; i < nwords; ++i)
     shenjs_word_restricted[words[i]] = 1
 }
@@ -348,7 +353,7 @@ function shenjs_str_map(word_tbl, sym_tbl, s) {
   var ret = ""
   var replaced
   while (s != "") {
-		replaced = false
+    replaced = false
     for (k in sym_tbl)
       if (k != "" && shenjs_str_starts_with(s, k)) {
         ret += sym_tbl[k]
@@ -356,7 +361,7 @@ function shenjs_str_map(word_tbl, sym_tbl, s) {
         replaced = true
         break
       }
-	  if (!replaced) {
+    if (!replaced) {
       ret += s[0]
       s = s.substring(1, s.length)
     }
@@ -364,9 +369,7 @@ function shenjs_str_map(word_tbl, sym_tbl, s) {
   return ret
 }
 
-function shenjs_str(args) {
-  if (args.length < 1) return [shen_type_func, shenjs_str, 1, args]
-  var x = args[0]
+function shenjs_str(x) {
   var err = " is not an atom in Shen; str cannot print it to a string."
   switch (typeof(x)) {
     case "string": return "\"" + shenjs_esc(x) + "\""
@@ -381,14 +384,17 @@ function shenjs_str(args) {
         return "fail!"
       if (x instanceof Array) {
         if (x.length <= 0) {
-          shenjs_error(["[]" + err])
+          shenjs_error("[]" + err)
           return shen_fail_obj
         }
         switch (x[0]) {
           case shen_type_symbol: return x[1]
           case shen_type_func:
-						// TODO: probably I should store function name if possible
-						return "#<function>"
+            if (!x[3].length && x[4] != undefined)
+              return x[4]
+            if (shenjs_is_true(shenjs_globals['shen_shen-*show-func-js*']))
+              shenjs_puts("\n func: " + x + "\n\n")
+            return (x[3].length == 0) ? "#<function>" : "#<closure>"
         }
       }
   }
@@ -396,32 +402,26 @@ function shenjs_str(args) {
   return shen_fail_obj
 }
 
-function shenjs_intern(args) {
-  if (args.length < 1) return [shen_type_func, shenjs_intern, 1, args]
-  var s = args[0]
-  switch (s) {
+function shenjs_intern(x) {
+  switch (x) {
   case "true": return true
   case "false": return false
-  default: return [shen_type_symbol, s]
+  default: return [shen_type_symbol, x]
   }
 }
 
-function shenjs_tlstr(args) {
-  if (args.length < 1) return [shen_type_func, shenjs_tlstr, 1, args]
-  var x = args[0]
+function shenjs_tlstr(x) {
   if (x == "")
     return [shen_type_symbol, "shen_eos"]
   return x.substring(1, x.length)
 }
 
-function shenjs_n_$gt$string(args) {
-  if (args.length < 1) return [shen_type_func, shenjs_n_$gt$string, 1, args]
-  return String.fromCharCode(args[0])
+function shenjs_n_$gt$string(x) {
+  return String.fromCharCode(x)
 }
 
-function shenjs_string_$gt$n(args) {
-  if (args.length < 1) return [shen_type_func, shenjs_string_$gt$n, 1, args]
-  return args[0].charCodeAt(0)
+function shenjs_string_$gt$n(x) {
+  return x.charCodeAt(0)
 }
 
 function shenjs_eval_in_global(x) {
@@ -436,15 +436,13 @@ function shenjs_eval_in_global(x) {
     return eval.call(null, x);
 }
 
-function shenjs_eval_kl (args) {
-  if (args.length < 1) return [shen_type_func, shenjs_eval_kl, 1, args]
-  var x = args[0]
+function shenjs_eval_kl(x) {
   var log = false
-  if (shenjs_is_true(shenjs_globals['shen-*show-eval-js*']))
+  if (shenjs_is_true(shenjs_globals['shen_shen-*show-eval-js*']))
     log = true
   if (log) {
     shenjs_puts("# eval-kl[KL]: " + "\n")
-    shenjs_puts(shenjs_call(shen_intmake_string, 
+    shenjs_puts(shenjs_call(shen_intmake_string,
                             ["~R~%", [shen_tuple, x, []]]))
   }
   var js = shenjs_call(js_from_kl, [x])
@@ -454,20 +452,25 @@ function shenjs_eval_kl (args) {
   if (log)
     shenjs_puts("eval-kl => '" + ret + "'\n\n")
   if (ret === undefined)
-    shenjs_error(["evaluated '" + js + "' to undefined"])
+    shenjs_error("evaluated '" + js + "' to undefined")
   return ret
 }
 
-function shenjs_eval_js(x) {
-	if (x.length < 1) return [shen_type_func, shenjs_eval_js, 1, []]
-	return new Shen_tco_obj(function() {return shenjs_eval_in_global(js)})
-}
+shenjs_load = shenjs_mkfunction("shenjs-load", 1, function self(x) {
+  if (x.length < 1) return [shen_type_func, self, 1, x]
+  return (function() {
+    load(x)
+    return []
+  })
+})
 
-shenjs_globals["*language*"] = "Javascript"
-shenjs_globals["*implementation*"] = "cli"
-shenjs_globals["*port*"] = "0.3"
-shenjs_globals["*porters*"] = "Ramil Farkhshatov"
-shenjs_globals["js-skip-internals"] = true
+shenjs_globals["shen_*language*"] = "Javascript"
+shenjs_globals["shen_*implementation*"] = "cli"
+shenjs_globals["shen_*port*"] = "0.3"
+shenjs_globals["shen_*porters*"] = "Ramil Farkhshatov"
+shenjs_globals["shen_js-skip-internals"] = true
 
-shenjs_globals["shen-*show-error-js*"] = false
-shenjs_globals["shen-*show-eval-js*"] = false
+shenjs_globals["shen_shen-*show-error-js*"] = false
+shenjs_globals["shen_shen-*show-eval-js*"] = false
+shenjs_globals["shen_shen-*show-func-js*"] = false
+shenjs_globals["shen_shen-*dbg-js*"] = false

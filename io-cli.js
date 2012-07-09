@@ -2,17 +2,15 @@
 try {
 	shenjs_open;
 } catch (e) {
-	function shenjs_open(args) {
-		if (args.length < 3) return [shenjs_open, 3, args]
-		var type = args[0], name = args[1], dir = args[2]
+	function shenjs_open(type, name, dir) {
 		if (type[1] != "file")
 			return shen_fail_obj
-		var filename = shenjs_globals["*home-directory*"] + name
+		var filename = shenjs_globals["shen_*home-directory*"] + name
 		if (dir[1] == "in") {
 			try {
 				var s = read(filename)
 			} catch(e) {
-				shenjs_error([e])
+				shenjs_error(e)
 				return shen_fail_obj
 			}
 			var stream = [shen_type_stream_in, null, function(){}]
@@ -21,10 +19,10 @@ try {
 			})
 			return stream
 		} else if (dir[1] == "out") {
-			shenjs_error(["Writing files is not supported in cli interpreter"])
+			shenjs_error("Writing files is not supported in cli interpreter")
 			return shen_fail_obj
 		}
-		shenjs_error(["Unsupported open flags"])
+		shenjs_error("Unsupported open flags")
 		return shen_fail_obj
 	}
 }
@@ -54,7 +52,7 @@ try {
 			return shenjs_repl_write_byte(byte)
 		})
 		fout[2] = (function() {})
-		shenjs_globals["*stoutput*"] = fout
+		shenjs_globals["shen_*stoutput*"] = fout
 
 		var fin = [shen_type_stream_in, null, null]
 		fin[1] = (function() {
@@ -63,6 +61,6 @@ try {
 		fin[2] = (function() {quit()})
 
 		var finout = [shen_type_stream_inout, fin, fout]
-		shenjs_globals["*stinput*"] = finout
+		shenjs_globals["shen_*stinput*"] = finout
 	}
 }

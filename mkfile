@@ -8,11 +8,15 @@ prepare:V:
 		printf 'g/fail!/s/fail!/(fail)/g\nw\nq' | ed $f
 
 fix_hash:V:
-  {
-		echo 'g/#/s/#/_hash/g'
-		echo 'w'
-		echo 'q'
-	} | ed js/sys.js
+	if (grep '#' js/sys.js >/dev/null >[2=1]) {
+		{
+			echo 'g/#/s/#/_hash/g'
+			echo 'w'
+			echo 'q'
+		} | ed js/sys.js
+	}
+	if not
+		true
 
 run:V: fix_hash
 	$js load.js

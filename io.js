@@ -13,7 +13,7 @@
   stream_inout -> [tag, stream_in, stream_out]
 */
 
-shenjs_globals["*home-directory*"] = ""
+shenjs_globals["shen_*home-directory*"] = ""
 
 function shenjs_file_instream_get(stream, s, pos) {
   if (s.length <= pos) {
@@ -26,37 +26,31 @@ function shenjs_file_instream_get(stream, s, pos) {
   return s.charCodeAt(pos)
 }
 
-function shenjs_read_byte(args) {
-	if (args.length < 1) return [shenjs_read_byte, 1, args]
-	var stream = args[0]
-  switch (stream[0]) {
+function shenjs_read_byte(stream) {
+ switch (stream[0]) {
     case shen_type_stream_in: return stream[1]()
-    case shen_type_stream_inout: return shenjs_read_byte([stream[1]])
+    case shen_type_stream_inout: return shenjs_read_byte(stream[1])
     default:
-      shenjs_error(["read-byte: Wrong stream type."])
+      shenjs_error("read-byte: Wrong stream type.")
       return -1;
   }
 }
 
-function shenjs_write_byte(args) {
-	if (args.length < 2) return [shenjs_write_byte, 2, args]
-	var byte = args[0], stream = args[1]
-  switch (stream[0]) {
+function shenjs_write_byte(byte, stream) {
+ switch (stream[0]) {
     case shen_type_stream_out:
       stream[1](byte)
       break;
     case shen_type_stream_inout:
-      shenjs_write_byte([byte, stream[2]])
+      shenjs_write_byte(byte, stream[2])
       break;
-    default: shenjs_error(["write-byte: Wrong stream type."])
+    default: shenjs_error("write-byte: Wrong stream type.")
   }
   return []
 }
 
-function shenjs_close(args) {
-	if (args.length < 1) return [shenjs_close, 1, args]
-	var stream = args[0]
-  switch (stream[0]) {
+function shenjs_close(stream) {
+ switch (stream[0]) {
     case shen_type_stream_in:
       stream[2]()
       stream[1] = (function() {return -1});
@@ -66,8 +60,8 @@ function shenjs_close(args) {
       stream[1] = (function(_) {return []});
       break;
     case shen_type_stream_inout:
-      shenjs_close([stream[1]])
-      shenjs_close([stream[2]])
+      shenjs_close(stream[1])
+      shenjs_close(stream[2])
       break;
   }
   return []
@@ -95,11 +89,9 @@ function shenjs_repl_read_byte(stream, s, pos) {
   return s.charCodeAt(pos)
 }
 
-function shenjs_pr(args) {
-  if (args.length < 2) return [shenjs_pr, 2, args]
-	var s = args[0], stream = args[1]
+function shenjs_pr(s, stream) {
 	for (i = 0; i < s.length; ++i)
-		shenjs_write_byte([s.charCodeAt(i), stream])
+		shenjs_write_byte(s.charCodeAt(i), stream)
 	return s
 }
 

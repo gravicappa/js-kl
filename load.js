@@ -23,6 +23,8 @@ function shenjs_load_files() {
 	load(dir + "js/primitives.js")
 	load(dir + "dbg.js")
 
+	load(dir + "test.js")
+
 	shenjs_dbg_log = false
 
 	/* dummy functions to bypass defstruct's declarations */
@@ -44,6 +46,6 @@ function shenjs_start_shen() {
 shenjs_load_files()
 
 shenjs_dbg_log = true
-shenjs_globals['shen-*show-eval-js*'] = true
+shenjs_globals['shen-*show-eval-js*'] = false
 
-//shenjs_start_shen()
+shenjs_start_shen()
