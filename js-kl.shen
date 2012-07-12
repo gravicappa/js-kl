@@ -1,3 +1,6 @@
+(package js- [js-from-kl js-dump-to-file js-dump register-dumper js all
+              shen-*hush* reg-kl-walk]
+
 (defstruct context
   (nregs number)
   (toplevel string)
@@ -39,7 +42,7 @@
 \* renaming all js-reserved keywords, functions, ... *\
 (define str-js-from-shen
   X -> (cn "$shen$" X)
-       where (element? X ["return" "new" "delete" "function" "while" "for" 
+       where (element? X ["return" "new" "delete" "function" "while" "for"
                           "var" "if" "do" "in" "super" "load" "print" "eval"
                           "read" "readline" "write" "putstr" "let"
                           "Array" "Object" "document"])
@@ -80,14 +83,14 @@
   X -> (sym-js-from-shen X) where (symbol? X)
   X -> X)
 
-(set js-int-funcs [[[X] | [hd tl not thaw string? number? symbol? cons?
-                           vector? absvector? value intern vector
-                           read-byte close absvector str tlstr n->string
-                           string->n empty? get-time error simple-error
-                           eval-kl error-to-string call-js]]
-                   [[X Y] | [+ - * / and or = > >= < <= cons set <-address
-                             cn pos @p pr]]
-                   [[X Y Z] | [address-> open]]])
+(set int-funcs [[[X] | [hd tl not thaw string? number? symbol? cons?
+                        vector? absvector? value intern vector
+                        read-byte close absvector str tlstr n->string
+                        string->n empty? get-time error simple-error
+                        eval-kl error-to-string call-js]]
+                [[X Y] | [+ - * / and or = > >= < <= cons set <-address
+                         cn pos @p pr]]
+                [[X Y Z] | [address-> open]]])
 
 (set internals [get-time = empty? boolean? vector? absvector?
                 absvector value set vector str intern n->string
@@ -102,9 +105,9 @@
   X [[_ | _] | R] -> (int-func-args* X R))
 
 (define int-func-args
-  X -> (int-func-args* X (value js-int-funcs)))
+  X -> (int-func-args* X (value int-funcs)))
 
-(define js-int-func?
+(define int-func?
   fail -> true
   X -> (not (empty? (int-func-args X))))
 
@@ -337,32 +340,32 @@
   fail [] _ _ -> "shen_fail_obj"
   _ _ _ _ -> (fail))
 
-(define js-mk-regs-aux
+(define mk-regs-aux
   N N _ _ Acc -> Acc
   I N C Sep Acc -> (let S (make-string
                             "~A~A~A~A" Acc Sep (context-varname C) I)
-                     (js-mk-regs-aux (+ I 1) N C ", " S)))
+                     (mk-regs-aux (+ I 1) N C ", " S)))
 
 \* MUST be called after js-from-kl-expr since uses context-nregs which is
    updated in translation state *\
-(define js-mk-regs
-  C -> (js-mk-regs-aux 0 (context-nregs C) C "var " ""))
+(define mk-regs
+  C -> (mk-regs-aux 0 (context-nregs C) C "var " ""))
 
-(define js-mk-regs-str
+(define mk-regs-str
   C -> "" where (= (context-nregs C) 0)
-  C -> (make-string "~A;~%  " (js-mk-regs C)))
+  C -> (make-string "~A;~%  " (mk-regs C)))
 
-(define js-mk-args-str-aux
+(define mk-args-str-aux
   [] _ _ _ Acc -> Acc
   [A | Args] I C Sep Acc -> (let F "~A~A~A = ~A[~A]"
                                  N (context-argname C)
                                  V (arg-name I C)
                                  S (make-string F Acc Sep V N I)
-                              (js-mk-args-str-aux Args (+ I 1) C ", " S)))
+                              (mk-args-str-aux Args (+ I 1) C ", " S)))
 
-(define js-mk-args-str
+(define mk-args-str
   [] _ -> ""
-  Args C -> (make-string "~A;~%  " (js-mk-args-str-aux Args 0 C "var " "")))
+  Args C -> (make-string "~A;~%  " (mk-args-str-aux Args 0 C "var " "")))
 
 (define emit-func-obj
   Args Body Closure FN -> (let Nargs (length Args)
@@ -394,8 +397,8 @@
                              F "function ~A(~A) {~%  ~A;~%  ~A~Areturn ~A}"
                              X (js-from-kl-expr Code true C)
                              \* NB: after js-from-kl-expr *\
-                             R (js-mk-regs-str C) 
-                             A (js-mk-args-str Args C)
+                             R (mk-regs-str C)
+                             A (mk-args-str Args C)
                         (make-string F Ln (context-argname C) G A R X)))
 
 (define emit-mk-func
@@ -483,14 +486,14 @@
 (define js-from-kl-toplevel-expr
   X C -> (make-string "~A;~%" (js-from-kl-expr X false C)) where (string? X)
   X C -> (let X (js-from-kl-expr X false C)
-              Regs (js-mk-regs-str C) \* NB: after js-from-kl-expr *\
+              Regs (mk-regs-str C) \* NB: after js-from-kl-expr *\
            (if (> (context-nregs C) 0)
                (make-string "((function() {~%  ~Areturn ~A})());~%" Regs X)
                (make-string "~A;" X))))
 
 (define js-from-kl-toplevel
   [set X V] _ C -> (make-string "~A;~%" (emit-set X V C))
-  [shen-mk-func F | _] true _ -> "" where (js-int-func? F)
+  [shen-mk-func F | _] true _ -> "" where (int-func? F)
   [shen-mk-func | R] _ C -> (js-from-kl-expr [shen-mk-func | R] true C)
   X _ C -> (js-from-kl-toplevel-expr X C))
 
@@ -506,15 +509,15 @@
 (define js-from-kl
   X -> (let C (mk-context 0 "" (gensym (intern "Arg")) (intern "R"))
             Rx (reg-kl-walk [X])
-            X (js-from-kl-toplevel-forms Rx (value js-skip-internals) C "")
+            X (js-from-kl-toplevel-forms Rx (value skip-internals) C "")
          (make-string "~A~%~A~%" (context-toplevel C) X)))
 
 (define js-from-kl-all
   X -> (let X (reg-kl-walk X)
             C (mk-context 0 "" (gensym (intern "Arg")) (intern "R"))
-         (js-from-kl-toplevel-all X (value js-skip-internals) C "")))
+         (js-from-kl-toplevel-all X (value skip-internals) C "")))
 
-(set js-skip-internals true)
+(set skip-internals true)
 
 (define js-write-string
   X P Out -> (trap-error (do (pr (pos X P) Out)
@@ -532,3 +535,26 @@
                    R (js-dump-exprs-to-file Exprs F)
                    R2 (close F)
                 true))
+
+(define kl-from-shen
+  X -> (let X (shen-walk (function macroexpand) X)
+            X (if (shen-packaged? X)
+                  (package-contents X)
+                  X)
+         (shen-elim-define (shen-proc-input+ X))))
+
+(define js-dump
+  Sdir F Ddir -> (let D (make-string "~A~A.js" Ddir F)
+                      S (make-string "~A~A" Sdir F)
+                      Kl (map (function kl-from-shen) (read-file S))
+                      T1 (if (= (value shen-*hush*) hushed)
+                             _
+                             (output "== ~A -> ~A~%" S D))
+                   (js-dump-to-file Kl D)))
+
+(declare js-dump [string --> [string --> [string --> boolean]]])
+
+(if (trap-error (do (register-dumper) true) (/. _ false))
+    (register-dumper js all js-dump)
+    _)
+)
