@@ -1,5 +1,5 @@
-(package js- [js-from-kl js-dump-to-file js-dump register-dumper js all
-              shen-*hush* reg-kl-walk]
+(package js- [js-from-kl js-dump-to-file js-dump register-dumper
+              shen-*hush* reg-kl-walk javascript all cli]
 
 (defstruct context
   (nregs number)
@@ -60,9 +60,9 @@
                     (esc-string S (make-string "~A~A~A" Acc P C)))
                   where (or (= C (value js-backslash))
                             (= C (value js-dquote)))
-  (@s C S) Acc -> (esc-string S (cn Acc "\\x0a"))
+  (@s C S) Acc -> (esc-string S (cn Acc "\x0a"))
                   where (= (string->n C) 10)
-  (@s C S) Acc -> (esc-string S (cn Acc "\\x0d"))
+  (@s C S) Acc -> (esc-string S (cn Acc "\x0d"))
                   where (= (string->n C) 13)
   (@s C S) Acc -> (esc-string S (cn Acc C)))
 
@@ -112,7 +112,7 @@
   X -> (not (empty? (int-func-args X))))
 
 (define esc-obj
-  X -> (make-string "\"~A\"" (esc-string X "")) where (string? X)
+  X -> (make-string "c#34;~Ac#34;" (esc-string X "")) where (string? X)
   X -> (func-name X) where (shen-sysfunc? X)
   X -> (sym-js-from-shen X) where (symbol? X)
   X -> (error "Object ~R cannot be escaped" X))
@@ -247,14 +247,6 @@
                     P (esc-obj "shen_")
                  (make-string "(shenjs_globals[~A + ~A[1]])" P X)))
 
-(define emit-freeze
-  Body C -> (make-string "(new Shenjs_freeze_obj(function() {return ~A;}))"
-                         (tail-call-ret (js-from-kl-expr Body true C))))
-
-(define emit-thaw
-  X false C -> (make-string "shenjs_unwind_tail(~A)" (emit-thaw X true C))
-  X true C -> (make-string "(~A).fn()" (js-from-kl-expr X false C)))
-
 (define basic-op
   intern ["true"] _ _ -> "true"
   intern ["false"] _ _ -> "false"
@@ -304,7 +296,7 @@
 (define int-curry
   F Opargs Args C -> (let X (make-string "~A[1]" (func-name F))
                           A (map (/. X (js-from-kl-expr X false C)) Args)
-                       (emit-func-obj Opargs X A [])))
+                       (emit-func-obj (length Opargs) X A [])))
 
 (define internal-op*
   Op Opargs Args Tail? C -> (int-funcall Op Args Tail? C)
@@ -356,79 +348,96 @@
   C -> (make-string "~A;~%  " (mk-regs C)))
 
 (define mk-args-str-aux
-  [] _ _ _ Acc -> Acc
-  [A | Args] I C Sep Acc -> (let F "~A~A~A = ~A[~A]"
-                                 N (context-argname C)
-                                 V (arg-name I C)
-                                 S (make-string F Acc Sep V N I)
-                              (mk-args-str-aux Args (+ I 1) C ", " S)))
+  I I _ _ Acc -> Acc
+  End I C Sep Acc -> (let F "~A~A~A = ~A[~A]"
+                          N (context-argname C)
+                          V (arg-name I C)
+                          S (make-string F Acc Sep V N I)
+                       (mk-args-str-aux End (+ I 1) C ", " S)))
 
 (define mk-args-str
-  [] _ -> ""
-  Args C -> (make-string "~A;~%  " (mk-args-str-aux Args 0 C "var " "")))
+  0 _ -> ""
+  N C -> (make-string "~A;~%  " (mk-args-str-aux N 0 C "var " "")))
 
 (define emit-func-obj
-  Args Body Closure FN -> (let Nargs (length Args)
-                               F "[~A,~%  ~A,~%  ~A,~%  [~A]~A]"
-                               N (if (or (= FN "") (empty? FN))
-                                     ""
-                                     (make-string ",~%  ~A" FN))
-                               Tp "shen_type_func"
-                               C (str-join Closure ", ")
-                            (make-string F Tp Body Nargs C N)))
+  Nargs Body Closure FN -> (let N (if (or (= FN "") (empty? FN))
+                                      ""
+                                      (make-string ",~%  ~A" FN))
+                                Tp "shen_type_func"
+                                C (str-join Closure ", ")
+                                F "[~A,~%  ~A,~%  ~A,~%  [~A]~A]"
+                             (make-string F Tp Body Nargs C N)))
 
 (define emit-func-closure
-  Args Fn Argsname -> (let Nargs (length Args)
-                           F "[~A, ~A, ~A, ~A]"
-                           Tp "shen_type_func"
-                        (make-string F Tp Fn Nargs Argsname)))
+  Nargs Fn Argsname -> (let F "[~A, ~A, ~A, ~A]"
+                         Tp "shen_type_func"
+                         (make-string F Tp Fn Nargs Argsname)))
 
 (define emit-func-body
-  Name L Args Code C -> (let Ln (func-name L)
-                             N (if (empty? Name)
-                                   []
-                                   (esc-obj (str Name)))
-                             Nargs (length Args)
-                             O (emit-func-closure Args Ln (context-argname C))
-                             G (make-string "if (~A.length < ~A) return ~A"
-                                            (context-argname C)
-                                            Nargs
-                                            O)
-                             F "function ~A(~A) {~%  ~A;~%  ~A~Areturn ~A}"
-                             X (js-from-kl-expr Code true C)
-                             \* NB: after js-from-kl-expr *\
-                             R (mk-regs-str C)
-                             A (mk-args-str Args C)
-                        (make-string F Ln (context-argname C) G A R X)))
+  Name L Nargs Code C -> (let Ln (func-name L)
+                              N (if (empty? Name)
+                                    []
+                                    (esc-obj (str Name)))
+                              Argname (context-argname C)
+                              O (emit-func-closure Nargs Ln Argname)
+                              G (make-string "if (~A.length < ~A) return ~A"
+                                             (context-argname C)
+                                             Nargs
+                                             O)
+                              F "function ~A(~A) {~%  ~A;~%  ~A~Areturn ~A}"
+                              X (js-from-kl-expr Code true C)
+                              \* NB: after js-from-kl-expr *\
+                              R (mk-regs-str C)
+                              A (mk-args-str Nargs C)
+                           (make-string F Ln Argname G A R X)))
 
 (define emit-mk-func
   Name Args Code C -> (let Fn (esc-obj (str Name))
                            Key (esc-obj (cn "shen_" (str Name)))
                            Name (func-name Name)
+                           Nargs (length Args)
                            N (gensym shen-user-lambda)
-                           X (emit-func-body Name N Args Code C)
+                           X (emit-func-body Name N Nargs Code C)
                            F "~A = ~A;~%shenjs_functions[~A] = ~A;~%"
-                           Fo (emit-func-obj Args X [] Fn)
+                           Fo (emit-func-obj Nargs X [] Fn)
                         (make-string F Name Fo Key Name)))
 
 (define emit-mk-closure
   Args Init Code C -> (let TL (context-toplevel C)
                            Arg (intern "Arg")
+                           Nargs (+ (length Init) (length Args))
                            C1 (mk-context 0 TL (gensym Arg) (intern "R"))
                            N (gensym shen-user-lambda)
-                           T1 (context-toplevel-> C (context-toplevel C1))
+                           X (emit-func-body [] N Nargs Code C1)
+                           _ (context-toplevel-> C (context-toplevel C1))
                            A (map (/. X (js-from-kl-expr X false C)) Init)
-                        (emit-func-obj Args
-                                       (emit-func-body [] N Args Code C1)
-                                       A
-                                       [])))
+                        (emit-func-obj Nargs X A [])))
+
+(define emit-freeze
+  Init Body C -> (let TL (context-toplevel C)
+                      Arg (intern "Arg")
+                      C1 (mk-context 0 TL (gensym Arg) (intern "R"))
+                      N (gensym shen-user-lambda)
+                      _ (context-toplevel-> C (context-toplevel C1))
+                      Args (map (/. X (js-from-kl-expr X false C)) Init)
+                      Closure (str-join Args ", ")
+                      X (tail-call-ret (js-from-kl-expr Body true C1))
+                      A (mk-args-str (length Args) C1)
+                      FF "function(~A) {~%  ~Areturn ~A}"
+                      SF (make-string FF (context-argname C1) A X)
+                      F "(new Shenjs_freeze([~A], ~A))"
+                   (make-string F Closure SF)))
+
+(define emit-thaw
+  X false C -> (make-string "shenjs_unwind_tail(~A)" (emit-thaw X true C))
+  X true C -> (make-string "shenjs_thaw(~A)" (js-from-kl-expr X false C)))
 
 (define emit-get-arg
   N C -> (arg-name N C))
 
 (define emit-set-reg
   N X C -> (let Y (js-from-kl-expr X false C)
-                T1 (context-nregs-> C (max (+ N 1) (context-nregs C)))
+                _ (context-nregs-> C (max (+ N 1) (context-nregs C)))
              (make-string "(~A~A = ~A)" (context-varname C) N Y)))
 
 (define emit-get-reg
@@ -469,7 +478,8 @@
   [type Value _] Tail? C -> (js-from-kl-expr Value Tail? C)
   [cond | Cases] Tail? C -> (emit-cond Cases Tail? C)
   [if Expr Then Else] Tail? C -> (emit-cond [[Expr Then] [true Else]] Tail? C)
-  [freeze X] _ C -> (emit-freeze X C)
+  [freeze X] _ C -> (error "Wrong freeze code!")
+  [shen-mk-freeze Init X] _ C -> (emit-freeze Init X C)
 
   [shen-get-arg N] _ C -> (emit-get-arg N C)
   [shen-get-reg N] _ C -> (emit-get-reg N C)
@@ -547,14 +557,14 @@
   Sdir F Ddir -> (let D (make-string "~A~A.js" Ddir F)
                       S (make-string "~A~A" Sdir F)
                       Kl (map (function kl-from-shen) (read-file S))
-                      T1 (if (= (value shen-*hush*) hushed)
-                             _
-                             (output "== ~A -> ~A~%" S D))
+                      _ (if (= (value shen-*hush*) hushed)
+                            _
+                            (output "== ~A -> ~A~%" S D))
                    (js-dump-to-file Kl D)))
 
 (declare js-dump [string --> [string --> [string --> boolean]]])
 
 (if (trap-error (do (register-dumper) true) (/. _ false))
-    (register-dumper js all js-dump)
+    (register-dumper javascript all js-dump)
     _)
 )

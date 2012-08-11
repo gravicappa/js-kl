@@ -1,3 +1,4 @@
+(package jsprim- []
 (trap-error
   (value top-dir)
   (/. E
@@ -15,10 +16,8 @@
   F _ [] Acc -> Acc
   F Args [D | Defs] Acc -> (let T1 (output "mk-op-defs-n ~A~%" D)
                                 K (js-from-kl [defun D Args [D | Args]])
-                                \*A (make-string "~A~A~%" Acc K)*\
-                                A Acc
                                 T1 (pr (make-string "~A~%" K) F)
-                             (mk-op-defs-n F Args Defs A)))
+                             (mk-op-defs-n F Args Defs Acc)))
 
 (define mk-op-defs
   F [] Acc -> Acc
@@ -27,11 +26,10 @@
 (define mk-op-defs-to-file
   Filename -> (let F (open file Filename out)
                    S (mk-op-defs F (value js-int-funcs) "")
-                   \*T1 (pr S F)*\
                    T2 (close F)
                 _))
 
-\*(track js-from-kl)*\
 (set js-skip-internals false)
 (mk-op-defs-to-file (cn (value dst-dir) "primitives.js"))
 (set js-skip-internals true)
+)
