@@ -569,15 +569,18 @@
          (shen-elim-define (shen-proc-input+ X))))
 
 (define js-dump
-  Sdir F Ddir -> (let D (make-string "~A~A.js" Ddir F)
-                      S (make-string "~A~A" Sdir F)
-                      Kl (map (function kl-from-shen) (read-file S))
-                      _ (if (= (value shen-*hush*) hushed)
-                            _
-                            (output "== ~A -> ~A~%" S D))
-                   (js-dump-to-file Kl D)))
+  Srcdir F Dstdir -> (let D (make-string "~A~A.js" Dstdir F)
+                          S (make-string "~A~A" Srcdir F)
+                          Kl (map (function kl-from-shen) (read-file S))
+                          _ (if (= (value shen-*hush*) hushed)
+                                _
+                                (output "== ~A -> ~A~%" S D))
+                       (js-dump-to-file Kl D)))
 
 (declare js-dump [string --> [string --> [string --> boolean]]])
+
+\* Register function js-dump as a dumper in Modulesys for all implementations
+of javascript language. Do nothing if Modulesys is not loaded *\
 
 (if (trap-error (do (register-dumper) true) (/. _ false))
     (register-dumper javascript all js-dump)
