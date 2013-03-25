@@ -178,7 +178,7 @@
                               "Shen.type_cons")
   tuple? X _ C -> (make-string "Shen.is_type(~A, ~A)"
                                (js-from-kl-expr X false C)
-                               "Shen.fns['shen_tuple']")
+                               "Shen.fns['shen-tuple']")
   vector? X Tail? C -> (int-funcall vector? [X] Tail? C)
   empty? X Tail? C -> (int-funcall empty? [X] Tail? C)
   absvector? X Tail? C -> (int-funcall absvector? [X] Tail? C)
@@ -252,7 +252,7 @@
                       (make-string "[Shen.type_cons, ~A, ~A]" X Y))
   @p [X Y] _ C -> (let X (js-from-kl-expr X false C)
                        Y (js-from-kl-expr Y false C)
-                    (make-string "[Shen.fns['shen_tuple'], ~A, ~A]" X Y))
+                    (make-string "[Shen.fns['shen-tuple'], ~A, ~A]" X Y))
   set [X Y] _ C -> (emit-set X Y C)
   value [X] _ C -> (emit-value X C (symbol? X))
   thaw [X] Tail? C -> (emit-thaw X Tail? C)
@@ -499,6 +499,9 @@
   [set X V] _ C -> (make-string "~A;~%" (emit-set X V C))
   [shen-mk-func F | _] true _ -> "" where (int-func? F)
   [shen-mk-func | R] _ C -> (js-from-kl-expr [shen-mk-func | R] true C)
+  [X] _ C -> (make-string "Shen.call_toplevel(~A)~%" (esc-obj (str X)))
+             where (symbol? X)
+  [X] _ C -> (error "Unexpected toplevel expression: ~R~%" X)
   X _ C -> (js-from-kl-toplevel-expr X C))
 
 (define js-from-kl-toplevel-forms
