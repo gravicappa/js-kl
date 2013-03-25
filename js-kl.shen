@@ -56,11 +56,6 @@
 
 \* renaming all js-reserved keywords, functions, ... *\
 (define str-js-from-shen
-  X -> (cn "$shen$" X)
-       where (element? X ["return" "new" "delete" "function" "while" "for"
-                          "var" "if" "do" "in" "super" "load" "print" "eval"
-                          "read" "readline" "write" "putstr" "let"
-                          "Array" "Object" "document"])
   X -> (str-js-from-shen* X ""))
 
 (define sym-js-from-shen
@@ -81,19 +76,12 @@
                   where (= (string->n C) 13)
   (@s C S) Acc -> (esc-string S (cn Acc C)))
 
-(define cut-shen-prefix
-  (@s "shen-" S) -> S
-  (@s "shen_" S) -> S
-  S -> S)
-
 (define func-name
-  X -> (intern (str-js-from-shen (cn "shen-" (cut-shen-prefix (str X)))))
-       where (or (shen-sysfunc? X) (value shen-*installing-kl*))
   X -> (sym-js-from-shen X) where (symbol? X)
   X -> X)
 
 (define intfunc-name
-  X -> (intern (str-js-from-shen (cn "shenjs-" (cut-shen-prefix (str X)))))
+  X -> (intern (cn "Shen." (str-js-from-shen (str X))))
        where (or (shen-sysfunc? X) (value shen-*installing-kl*))
   X -> (sym-js-from-shen X) where (symbol? X)
   X -> X)
@@ -128,7 +116,6 @@
 
 (define esc-obj
   X -> (make-string "c#34;~Ac#34;" (esc-string X "")) where (string? X)
-  X -> (func-name X) where (shen-sysfunc? X)
   X -> (sym-js-from-shen X) where (symbol? X)
   X -> (error "Object ~R cannot be escaped" X))
 
@@ -148,11 +135,6 @@
 
 (define tail-call-ret
   X -> (make-string "(function() {~%  return ~A;})" X))
-
-(define get-func-obj
-  X true C -> (make-string "shenjs_get_fn(~A)" (get-func-obj X false C))
-  X false C -> (func-name X) where (symbol? X)
-  X false C -> X)
 
 (define tail-call-expr
   Code C -> (js-from-kl-expr Code false C))
@@ -175,7 +157,7 @@
   X EF false C -> (let S (make-string "function() {return ~A;}"
                                       (js-from-kl-expr X false C))
                        EX (js-from-kl-expr EF false C)
-                    (make-string "shenjs_trap_error(~A, ~A)" S EX))
+                    (make-string "Shen.trap_error(~A, ~A)" S EX))
   X EF true C -> (tail-call-ret (emit-trap-error X EF false C)))
 
 (define predicate-op
@@ -188,15 +170,15 @@
                                 (js-from-kl-expr X false C))
   number? X _ C -> (make-string "(typeof(~A) == 'number')"
                                 (js-from-kl-expr X false C))
-  symbol? X _ C -> (make-string "shenjs_is_type(~A, ~A)"
+  symbol? X _ C -> (make-string "Shen.is_type(~A, ~A)"
                                 (js-from-kl-expr X false C)
-                                "shen_type_symbol")
-  cons? X _ C -> (make-string "shenjs_is_type(~A, ~A)"
+                                "Shen.type_symbol")
+  cons? X _ C -> (make-string "Shen.is_type(~A, ~A)"
                               (js-from-kl-expr X false C)
-                              "shen_type_cons")
-  tuple? X _ C -> (make-string "shenjs_is_type(~A, ~A)"
+                              "Shen.type_cons")
+  tuple? X _ C -> (make-string "Shen.is_type(~A, ~A)"
                                (js-from-kl-expr X false C)
-                               "shen_tuple")
+                               "Shen.fns['shen_tuple']")
   vector? X Tail? C -> (int-funcall vector? [X] Tail? C)
   empty? X Tail? C -> (int-funcall empty? [X] Tail? C)
   absvector? X Tail? C -> (int-funcall absvector? [X] Tail? C)
@@ -246,34 +228,31 @@
 
 
 (define emit-set*
-  X V C true -> (let S (esc-obj (cn "shen_" (str X)))
-                  (make-string "(shenjs_globals[~A] = ~A)" S V))
+  X V C true -> (let S (esc-obj (str X))
+                  (make-string "(Shen.globals[~A] = ~A)" S V))
   X V C false -> (let X (js-from-kl-expr X false C)
-                      P (esc-obj "shen_")
-                   (make-string "(shenjs_globals[~A + ~A[1]] = ~A)" P X V)))
+                   (make-string "(Shen.globals[~A[1]] = ~A)" X V)))
 
 (define emit-set
   X V C -> (emit-set* X (js-from-kl-expr V false C) C (symbol? X)))
 
 (define emit-value
-  X C true -> (let S (esc-obj (cn "shen_" (str X)))
-                (make-string "(shenjs_globals[~A])" S))
+  X C true -> (make-string "(Shen.globals[~A])" (esc-obj (str X)))
   X C false -> (let X (js-from-kl-expr X false C)
-                    P (esc-obj "shen_")
-                 (make-string "(shenjs_globals[~A + ~A[1]])" P X)))
+                 (make-string "(Shen.globals[~A[1]])" X)))
 
 (define basic-op
   intern ["true"] _ _ -> "true"
   intern ["false"] _ _ -> "false"
-  intern [X] _ _ -> (make-string "[shen_type_symbol, ~A]" (esc-obj X))
+  intern [X] _ _ -> (make-string "[Shen.type_symbol, ~A]" (esc-obj X))
                     where (string? X)
   intern [X] Tail? C -> (int-funcall intern [X] Tail? C)
   cons [X Y] _ C -> (let X (js-from-kl-expr X false C)
                          Y (js-from-kl-expr Y false C)
-                      (make-string "[shen_type_cons, ~A, ~A]" X Y))
+                      (make-string "[Shen.type_cons, ~A, ~A]" X Y))
   @p [X Y] _ C -> (let X (js-from-kl-expr X false C)
                        Y (js-from-kl-expr Y false C)
-                    (make-string "[shen_tuple, ~A, ~A]" X Y))
+                    (make-string "[Shen.fns['shen_tuple'], ~A, ~A]" X Y))
   set [X Y] _ C -> (emit-set X Y C)
   value [X] _ C -> (emit-value X C (symbol? X))
   thaw [X] Tail? C -> (emit-thaw X Tail? C)
@@ -286,11 +265,11 @@
   pos [X Y] _ C -> (make-string "~A[~A]"
                                 (js-from-kl-expr X false C)
                                 (js-from-kl-expr Y false C))
-  address-> [V I X] _ C -> (make-string "shenjs_absvector_set(~A, ~A, ~A)"
+  address-> [V I X] _ C -> (make-string "Shen.absvector_set(~A, ~A, ~A)"
                                         (js-from-kl-expr V false C)
                                         (js-from-kl-expr I false C)
                                         (js-from-kl-expr X false C))
-  <-address [V I] _ C -> (make-string "shenjs_absvector_ref(~A, ~A)"
+  <-address [V I] _ C -> (make-string "Shen.absvector_ref(~A, ~A)"
                                       (js-from-kl-expr V false C)
                                       (js-from-kl-expr I false C))
   _ _ _ _ -> (fail))
@@ -298,7 +277,7 @@
 (define int-funcall*
   F Args true true C -> (int-funcall* F Args false false C)
   F Args true false C -> (let X (int-funcall* F Args false false C)
-                           (make-string "shenjs_unwind_tail(~A)" X))
+                           (make-string "Shen.unwind_tail(~A)" X))
   F Args false false C -> (let A (map (/. X (js-from-kl-expr X false C)) Args)
                                As (str-join A ", ")
                             (make-string "~A(~A)" (intfunc-name F) As))
@@ -344,7 +323,7 @@
   Op X Tail? C <- (internal-op Op X Tail? C) where (symbol? Op)
   trap-error [X Y] Tail? C -> (emit-trap-error X Y Tail? C)
   do Body Tail? C -> (emit-do Body Tail? C [])
-  fail [] _ _ -> "shen_fail_obj"
+  fail [] _ _ -> "Shen.fail_obj"
   _ _ _ _ -> (fail))
 
 (define mk-regs-aux
@@ -378,14 +357,14 @@
   Nargs Body Closure FN -> (let N (if (or (= FN "") (empty? FN))
                                       ""
                                       (make-string ",~%  ~A" FN))
-                                Tp "shen_type_func"
+                                Tp "Shen.type_func"
                                 C (str-join Closure ", ")
                                 F "[~A,~%  ~A,~%  ~A,~%  [~A]~A]"
                              (make-string F Tp Body Nargs C N)))
 
 (define emit-func-closure
   Nargs Fn Argsname -> (let F "[~A, ~A, ~A, ~A]"
-                         Tp "shen_type_func"
+                         Tp "Shen.type_func"
                          (make-string F Tp Fn Nargs Argsname)))
 
 (define emit-func-body
@@ -408,14 +387,12 @@
 
 (define emit-mk-func
   Name Args Code C -> (let Fn (esc-obj (str Name))
-                           Key (esc-obj (cn "shen_" (str Name)))
                            Name (func-name Name)
                            Nargs (length Args)
                            N (gensym shen-user-lambda)
                            X (emit-func-body Name N Nargs Code C)
-                           F "~A = ~A;~%shenjs_functions[~A] = ~A;~%"
                            Fo (emit-func-obj Nargs X [] Fn)
-                        (make-string F Name Fo Key Name)))
+                        (make-string "Shen.fns[~A] = ~A;~%" Fn Fo)))
 
 (define emit-mk-closure
   Args Init Code C -> (let TL (context-toplevel C)
@@ -440,12 +417,12 @@
                       A (mk-args-str (length Args) C1)
                       FF "function(~A) {~%  ~Areturn ~A}"
                       SF (make-string FF (context-argname C1) A X)
-                      F "(new Shenjs_freeze([~A], ~A))"
+                      F "(new Shen.Freeze([~A], ~A))"
                    (make-string F Closure SF)))
 
 (define emit-thaw
-  X false C -> (make-string "shenjs_unwind_tail(~A)" (emit-thaw X true C))
-  X true C -> (make-string "shenjs_thaw(~A)" (js-from-kl-expr X false C)))
+  X false C -> (make-string "Shen.unwind_tail(~A)" (emit-thaw X true C))
+  X true C -> (make-string "Shen.thaw(~A)" (js-from-kl-expr X false C)))
 
 (define emit-get-arg
   N C -> (arg-name N C))
@@ -464,14 +441,16 @@
 (define emit-funcall*
   F Args true C -> (let A (map (/. X (js-from-kl-expr X false C)) Args)
                         As (str-join A ", ")
-                        Call "shenjs_call_tail"
+                        Call "Shen.call_tail"
                      (tail-call-ret (make-string "~A(~A, [~A])" Call F As)))
   F Args false C -> (let A (map (/. X (js-from-kl-expr X false C)) Args)
                          As (str-join A ", ")
-                      (make-string "shenjs_call(~A, [~A])" F As)))
+                      (make-string "Shen.call(~A, [~A])" F As)))
 
 (define emit-funcall
-  F Args Tail? C -> (emit-funcall* (func-name F) Args Tail? C))
+  F Args Tail? C -> (let F' (esc-obj (str F))
+                         F'' (make-string "Shen.fns[~A]" F')
+                      (emit-funcall* F'' Args Tail? C)))
 
 (define js-from-kl-expr
   X Tail? C -> (let R (js-from-kl-expr* X Tail? C)
@@ -485,22 +464,22 @@
   X _ _ -> "shen_fail_obj" where (= X (fail))
   true _ _ -> "true"
   false _ _ -> "false"
-  X _ _ -> (make-string "[shen_type_symbol, ~S]" (str X)) where (symbol? X)
-  | _ _ -> (make-string "[shen_type_symbol, ~S]" "|")
-  [cons X Y] _ C -> (make-string "[shen_type_cons, ~A, ~A]"
+  X _ _ -> (make-string "[Shen.type_symbol, ~S]" (str X)) where (symbol? X)
+  | _ _ -> (make-string "[Shen.type_symbol, ~S]" "|")
+  [cons X Y] _ C -> (make-string "[Shen.type_cons, ~A, ~A]"
                                  (js-from-kl-expr X false C)
                                  (js-from-kl-expr Y false C))
   [type Value _] Tail? C -> (js-from-kl-expr Value Tail? C)
   [cond | Cases] Tail? C -> (emit-cond Cases Tail? C)
   [if Expr Then Else] Tail? C -> (emit-cond [[Expr Then] [true Else]] Tail? C)
   [freeze X] _ C -> (error "Wrong freeze code!")
-  [shen-mk-freeze Init X] _ C -> (emit-freeze Init X C)
+  [shen-mk-freeze _ Init X] _ C -> (emit-freeze Init X C)
 
   [shen-get-arg N] _ C -> (emit-get-arg N C)
   [shen-get-reg N] _ C -> (emit-get-reg N C)
-  [shen-set-reg! N X] _ C ->  (emit-set-reg N X C)
-  [shen-mk-func Name Args Code] _ C -> (emit-mk-func Name Args Code C)
-  [shen-mk-closure Args Init Code] _ C -> (emit-mk-closure Args Init Code C)
+  [shen-set-reg! N X] _ C -> (emit-set-reg N X C)
+  [shen-mk-func Name Args _ Code] _ C -> (emit-mk-func Name Args Code C)
+  [shen-mk-closure Args _ Init Code] _ C -> (emit-mk-closure Args Init Code C)
 
   [F | A] Tail? C <- (std-op F A Tail? C)
   [[X | Y] | Args] Tail? C -> (let F (js-from-kl-expr [X | Y] false C)
@@ -533,12 +512,12 @@
 
 (define js-from-kl
   X -> (let C (mk-context 0 "" (gensym (intern "Arg")) (intern "R"))
-            Rx (reg-kl-walk [X])
+            Rx (reg-kl-walk [X] false)
             X (js-from-kl-toplevel-forms Rx (value skip-internals) C "")
          (make-string "~A~%~A~%" (context-toplevel C) X)))
 
 (define js-from-kl-all
-  X -> (let X (reg-kl-walk X)
+  X -> (let X (reg-kl-walk X false)
             C (mk-context 0 "" (gensym (intern "Arg")) (intern "R"))
          (js-from-kl-toplevel-all X (value skip-internals) C "")))
 
