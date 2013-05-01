@@ -13,10 +13,10 @@
   You should have received a copy of the GNU General Public License
   along with this program.  If not, see <http://www.gnu.org/licenses/>. *\
 
-(package js [js-from-kl js.dump register-dumper reg-kl.walk
+(package js [js-from-kl js-from-shen js.dump register-dumper reg-kl.walk
              javascript all cli
              shen-user-lambda shen-get-arg shen-get-reg shen-set-reg!
-             shen-mk-closure shen-mk-func shen-mk-freeze]
+             shen-closure shen-func shen-freeze shen-toplevel]
 
 (defstruct context
   (nregs number)
@@ -289,7 +289,7 @@
                       (int-funcall* F Args Tcall? Tail? C)))
 
 (define int-curry
-  F Opargs Args C -> (let X (make-string "~A[1]" (func-name F))
+  F Opargs Args C -> (let X (make-string "Shen.fns[c#34;~Ac#34;][1]" F)
                           A (map (/. X (js-from-kl-expr X false C)) Args)
                        (emit-func-obj (length Opargs) X A [])))
 
@@ -368,29 +368,26 @@
                          (make-string F Tp Fn Nargs Argsname)))
 
 (define emit-func-body
-  Name L Nargs Code C -> (let Ln (func-name L)
-                              N (if (empty? Name)
-                                    []
-                                    (esc-obj (str Name)))
-                              Argname (context-argname C)
-                              O (emit-func-closure Nargs Ln Argname)
-                              G (make-string "if (~A.length < ~A) return ~A"
-                                             (context-argname C)
-                                             Nargs
-                                             O)
-                              F "function ~A(~A) {~%  ~A;~%  ~A~Areturn ~A}"
-                              X (js-from-kl-expr Code true C)
-                              \* NB: after js-from-kl-expr *\
-                              R (mk-regs-str C)
-                              A (mk-args-str Nargs C)
-                           (make-string F Ln Argname G A R X)))
+  Name Nargs Code C -> (let Ln (func-name Name)
+                            Argname (context-argname C)
+                            O (emit-func-closure Nargs Ln Argname)
+                            G (make-string "if (~A.length < ~A) return ~A"
+                                           (context-argname C)
+                                           Nargs
+                                           O)
+                            F "function ~A(~A) {~%  ~A;~%  ~A~Areturn ~A}"
+                            X (js-from-kl-expr Code true C)
+                            \* NB: after js-from-kl-expr *\
+                            R (mk-regs-str C)
+                            A (mk-args-str Nargs C)
+                         (make-string F Ln Argname G A R X)))
 
 (define emit-mk-func
   Name Args Code C -> (let Fn (esc-obj (str Name))
                            Name (func-name Name)
                            Nargs (length Args)
                            N (gensym shen-user-lambda)
-                           X (emit-func-body Name N Nargs Code C)
+                           X (emit-func-body N Nargs Code C)
                            Fo (emit-func-obj Nargs X [] Fn)
                         (make-string "Shen.fns[~A] = ~A;~%" Fn Fo)))
 
@@ -400,10 +397,15 @@
                            Nargs (+ (length Init) (length Args))
                            C1 (mk-context 0 TL (gensym Arg) (intern "R"))
                            N (gensym shen-user-lambda)
-                           X (emit-func-body [] N Nargs Code C1)
+                           X (emit-func-body N Nargs Code C1)
                            _ (context-toplevel-> C (context-toplevel C1))
                            A (map (/. X (js-from-kl-expr X false C)) Init)
                         (emit-func-obj Nargs X A [])))
+
+(define emit-mk-toplevel
+  Code C -> (let Name (gensym shen-toplevel)
+                 X (emit-func-body Name 0 Code C)
+              (cn "Shen.call_toplevel(" (cn X ");"))))
 
 (define emit-freeze
   Init Body C -> (let TL (context-toplevel C)
@@ -473,13 +475,14 @@
   [cond | Cases] Tail? C -> (emit-cond Cases Tail? C)
   [if Expr Then Else] Tail? C -> (emit-cond [[Expr Then] [true Else]] Tail? C)
   [freeze X] _ C -> (error "Wrong freeze code!")
-  [shen-mk-freeze _ Init X] _ C -> (emit-freeze Init X C)
+  [shen-freeze _ Init X] _ C -> (emit-freeze Init X C)
 
   [shen-get-arg N] _ C -> (emit-get-arg N C)
   [shen-get-reg N] _ C -> (emit-get-reg N C)
   [shen-set-reg! N X] _ C -> (emit-set-reg N X C)
-  [shen-mk-func Name Args _ Code] _ C -> (emit-mk-func Name Args Code C)
-  [shen-mk-closure Args _ Init Code] _ C -> (emit-mk-closure Args Init Code C)
+  [shen-func Name Args _ Code] _ C -> (emit-mk-func Name Args Code C)
+  [shen-closure Args _ Init Code] _ C -> (emit-mk-closure Args Init Code C)
+  [shen-toplevel _ _ _ Code] _ C -> (emit-mk-toplevel Code C)
 
   [F | A] Tail? C <- (std-op F A Tail? C)
   [[X | Y] | Args] Tail? C -> (let F (js-from-kl-expr [X | Y] false C)
@@ -497,8 +500,9 @@
 
 (define js-from-kl-toplevel
   [set X V] _ C -> (@s (emit-set X V C) ";c#10;")
-  [shen-mk-func F | _] true _ -> "" where (int-func? F)
-  [shen-mk-func | R] _ C -> (js-from-kl-expr [shen-mk-func | R] true C)
+  [shen-func F | _] true _ -> "" where (int-func? F)
+  [shen-func | R] _ C -> (js-from-kl-expr [shen-func | R] true C)
+  [shen-toplevel | R] _ C -> (js-from-kl-expr [shen-toplevel | R] true C)
   [X] _ C -> (make-string "Shen.call_toplevel(~A)~%" (esc-obj (str X)))
              where (symbol? X)
   [X] _ C -> (error "Unexpected toplevel expression: ~R~%" X)
@@ -528,14 +532,10 @@
 
 (define dump-exprs-to-file
   [] _ -> true
-  [X | Rest] To -> (let . (output "kl<-shen~%")
-                        Kl (kl-from-shen X)
-                        . (output "js<-kl~%")
+  [X | Rest] To -> (let Kl (kl-from-shen X)
                         Js (js-from-kl Kl)
                         . (if (string? Js) _ (error "~A is not a string" Js))
-                        . (output "print js~%")
                         . (pr Js To)
-                        . (output "end~%")
                      (dump-exprs-to-file Rest To)))
 
 (define dump-to-file
@@ -550,6 +550,9 @@
                   (package-contents X)
                   X)
          (shen.elim-define (shen.proc-input+ X))))
+
+(define js-from-shen
+  X -> (js-from-kl (kl-from-shen X)))
 
 (set *silence* false)
 
