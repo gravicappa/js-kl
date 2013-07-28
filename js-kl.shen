@@ -93,13 +93,13 @@
                         string->n empty? get-time error simple-error
                         eval-kl error-to-string call-js]]
                 [[X Y] | [+ - * / and or = > >= < <= cons set <-address
-                         cn pos @p pr]]
-                [[X Y Z] | [address-> open]]])
+                         cn pos @p open write-byte]]
+                [[X Y Z] | [address->]]])
 
 (set internals [get-time = empty? boolean? vector? absvector?
                 absvector value set vector str intern n->string
                 string->n eval-kl open write-byte read-byte close
-                tlstr pr error simple-error error-to-string shenjs-call-js])
+                tlstr error simple-error error-to-string shenjs-call-js])
 
 (set tail-internals [= shenjs-call-js])
 
@@ -539,7 +539,7 @@
                      (dump-exprs-to-file Rest To)))
 
 (define dump-to-file
-  Exprs To -> (let F (open file To out)
+  Exprs To -> (let F (open To out)
                    R (dump-exprs-to-file Exprs F)
                    R2 (close F)
                 true))
@@ -549,7 +549,7 @@
             X (if (shen.packaged? X)
                   (package-contents X)
                   X)
-         (shen.elim-define (shen.proc-input+ X))))
+         (shen.elim-def (shen.proc-input+ X))))
 
 (define js-from-shen
   X -> (js-from-kl (kl-from-shen X)))
