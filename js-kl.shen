@@ -13,10 +13,11 @@
   You should have received a copy of the GNU General Public License
   along with this program.  If not, see <http://www.gnu.org/licenses/>. *\
 
-(package js [js-from-kl js-from-shen js.dump register-dumper reg-kl.walk
+(package js [js-from-kl js-from-shen js.dump register-dumper
              javascript all cli
-             shen-user-lambda shen-get-arg shen-get-reg shen-set-reg!
-             shen-closure shen-func shen-freeze shen-toplevel]
+             regkl.walk
+             shen-user-lambda regkl.arg regkl.reg regkl.reg-> regkl.closure
+             regkl.func regkl.trap-error regkl.freeze regkl.toplevel]
 
 (defstruct context
   (nregs number)
@@ -155,8 +156,7 @@
   Cases Tail? C -> (emit-cond* Cases Tail? C))
 
 (define emit-trap-error
-  X EF false C -> (let S (make-string "function() {return ~A;}"
-                                      (js-from-kl-expr X false C))
+  X EF false C -> (let S (js-from-kl-expr X false C)
                        EX (js-from-kl-expr EF false C)
                     (make-string "Shen.trap_error(~A, ~A)" S EX))
   X EF true C -> (tail-call-ret (emit-trap-error X EF false C)))
@@ -189,7 +189,8 @@
   + [X Y] _ _ -> (str (+ X Y)) where (and (number? X) (number? Y))
   - [X Y] _ _ -> (str (- X Y)) where (and (number? X) (number? Y))
   * [X Y] _ _ -> (str (* X Y)) where (and (number? X) (number? Y))
-  / [X Y] _ _ -> (str (/ X Y)) where (and (number? X) (number? Y))
+  / [X Y] _ _ -> (str (/ X Y)) where (and (number? X) (number? Y)
+                                          (not (= Y 0)))
   Op [X Y] Tail? C -> (make-string "(~A ~A ~A)"
                                    (js-from-kl-expr X false C)
                                    Op
@@ -322,7 +323,7 @@
   Op X Tail? C <- (order-op Op X Tail? C)
   Op X Tail? C <- (basic-op Op X Tail? C)
   Op X Tail? C <- (internal-op Op X Tail? C) where (symbol? Op)
-  trap-error [X Y] Tail? C -> (emit-trap-error X Y Tail? C)
+  regkl.trap-error [X Y] Tail? C -> (emit-trap-error X Y Tail? C)
   do Body Tail? C -> (emit-do Body Tail? C [])
   fail [] _ _ -> "Shen.fail_obj"
   _ _ _ _ -> (fail))
@@ -403,28 +404,16 @@
                         (emit-func-obj Nargs X A [])))
 
 (define emit-mk-toplevel
-  Code C -> (let Name (gensym shen-toplevel)
+  Code C -> (let Name (gensym shen-js-toplevel)
                  X (emit-func-body Name 0 Code C)
               (cn "Shen.call_toplevel(" (cn X ");"))))
-
-(define emit-freeze
-  Init Body C -> (let TL (context-toplevel C)
-                      Arg (intern "Arg")
-                      C1 (mk-context 0 TL (gensym Arg) (intern "R"))
-                      N (gensym shen-user-lambda)
-                      _ (context-toplevel-> C (context-toplevel C1))
-                      Args (map (/. X (js-from-kl-expr X false C)) Init)
-                      Closure (str-join Args ", ")
-                      X (tail-call-ret (js-from-kl-expr Body true C1))
-                      A (mk-args-str (length Args) C1)
-                      FF "function(~A) {~%  ~Areturn ~A}"
-                      SF (make-string FF (context-argname C1) A X)
-                      F "(new Shen.Freeze([~A], ~A))"
-                   (make-string F Closure SF)))
 
 (define emit-thaw
   X false C -> (make-string "Shen.unwind_tail(~A)" (emit-thaw X true C))
   X true C -> (make-string "Shen.thaw(~A)" (js-from-kl-expr X false C)))
+
+(define emit-freeze
+  Init Code C -> (emit-mk-closure [] Init Code C))
 
 (define emit-get-arg
   N C -> (arg-name N C))
@@ -475,14 +464,14 @@
   [cond | Cases] Tail? C -> (emit-cond Cases Tail? C)
   [if Expr Then Else] Tail? C -> (emit-cond [[Expr Then] [true Else]] Tail? C)
   [freeze X] _ C -> (error "Wrong freeze code!")
-  [shen-freeze _ Init X] _ C -> (emit-freeze Init X C)
+  [regkl.freeze _ Init X] _ C -> (emit-freeze Init X C)
 
-  [shen-get-arg N] _ C -> (emit-get-arg N C)
-  [shen-get-reg N] _ C -> (emit-get-reg N C)
-  [shen-set-reg! N X] _ C -> (emit-set-reg N X C)
-  [shen-func Name Args _ Code] _ C -> (emit-mk-func Name Args Code C)
-  [shen-closure Args _ Init Code] _ C -> (emit-mk-closure Args Init Code C)
-  [shen-toplevel _ _ _ Code] _ C -> (emit-mk-toplevel Code C)
+  [regkl.arg N] _ C -> (emit-get-arg N C)
+  [regkl.reg N] _ C -> (emit-get-reg N C)
+  [regkl.reg-> N X] _ C -> (emit-set-reg N X C)
+  [regkl.func Name Args _ Code] _ C -> (emit-mk-func Name Args Code C)
+  [regkl.closure Args _ Init Code] _ C -> (emit-mk-closure Args Init Code C)
+  [regkl.toplevel _ _ _ Code] _ C -> (emit-mk-toplevel Code C)
 
   [F | A] Tail? C <- (std-op F A Tail? C)
   [[X | Y] | Args] Tail? C -> (let F (js-from-kl-expr [X | Y] false C)
@@ -500,9 +489,9 @@
 
 (define js-from-kl-toplevel
   [set X V] _ C -> (@s (emit-set X V C) ";c#10;")
-  [shen-func F | _] true _ -> "" where (int-func? F)
-  [shen-func | R] _ C -> (js-from-kl-expr [shen-func | R] true C)
-  [shen-toplevel | R] _ C -> (js-from-kl-expr [shen-toplevel | R] true C)
+  [regkl.func F | _] true _ -> "" where (int-func? F)
+  [regkl.func | R] _ C -> (js-from-kl-expr [regkl.func | R] true C)
+  [regkl.toplevel | R] _ C -> (js-from-kl-expr [regkl.toplevel | R] true C)
   [X] _ C -> (make-string "Shen.call_toplevel(~A)~%" (esc-obj (str X)))
              where (symbol? X)
   [X] _ C -> (error "Unexpected toplevel expression: ~R~%" X)
@@ -519,12 +508,12 @@
 
 (define js-from-kl
   X -> (let C (mk-context 0 "" (gensym (intern "Arg")) (intern "R"))
-            Rx (reg-kl.walk [X] false)
+            Rx (regkl.walk [X] false)
             X (js-from-kl-toplevel-forms Rx (value skip-internals) C "")
          (@s (context-toplevel C) "c#10;" X "c#10;")))
 
 (define js-from-kl-all
-  X -> (let X (reg-kl.walk X false)
+  X -> (let X (regkl.walk X false)
             C (mk-context 0 "" (gensym (intern "Arg")) (intern "R"))
          (js-from-kl-toplevel-all X (value skip-internals) C "")))
 
@@ -570,7 +559,5 @@
 \* Register function js-dump as a dumper in Modulesys for all implementations
 of javascript language. Do nothing if Modulesys is not loaded *\
 
-(if (trap-error (do (register-dumper) true) (/. _ false))
-    (register-dumper javascript all js.dump)
-    _)
+(trap-error (register-dumper javascript all js.dump) (/. E _))
 )
