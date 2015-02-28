@@ -394,9 +394,9 @@
 
 (define emit-mk-closure
   Args Init Code C -> (let TL (context-toplevel C)
-                           Arg (intern "Arg")
+                           Arg (protect Arg)
                            Nargs (+ (length Init) (length Args))
-                           C1 (mk-context 0 TL (gensym Arg) (intern "R"))
+                           C1 (mk-context 0 TL (gensym Arg) (protect R))
                            N (gensym shen-user-lambda)
                            X (emit-func-body N Nargs Code C1)
                            _ (context-toplevel-> C (context-toplevel C1))
@@ -507,31 +507,17 @@
   X Skip? C -> (js-from-kl-toplevel X Skip? C))
 
 (define js-from-kl
-  X -> (let C (mk-context 0 "" (gensym (intern "Arg")) (intern "R"))
+  X -> (let C (mk-context 0 "" (gensym (protect Arg)) (protect R))
             Rx (regkl.walk [X] false)
             X (js-from-kl-toplevel-forms Rx (value skip-internals) C "")
          (@s (context-toplevel C) "c#10;" X "c#10;")))
 
-(define js-from-kl-all
-  X -> (let X (regkl.walk X false)
-            C (mk-context 0 "" (gensym (intern "Arg")) (intern "R"))
-         (js-from-kl-toplevel-all X (value skip-internals) C "")))
+(define js-from-kl-forms
+  X -> (let Rx (regkl.walk X false)
+            C (mk-context 0 "" (gensym (protect Arg)) (protect R))
+         (js-from-kl-toplevel-forms Rx (value skip-internals) C "")))
 
 (set skip-internals true)
-
-(define dump-exprs-to-file
-  [] _ -> true
-  [X | Rest] To -> (let Kl (kl-from-shen X)
-                        Js (js-from-kl Kl)
-                        . (if (string? Js) _ (error "~A is not a string" Js))
-                        . (pr Js To)
-                     (dump-exprs-to-file Rest To)))
-
-(define dump-to-file
-  Exprs To -> (let F (open To out)
-                   R (dump-exprs-to-file Exprs F)
-                   R2 (close F)
-                true))
 
 (define kl-from-shen
   X -> (let X (shen.walk (function macroexpand) X)
@@ -545,19 +531,26 @@
 
 (set *silence* false)
 
+(define translate-file
+  File -> (js-from-kl-forms (kl-from-shen (read-file File))))
+
+(define file-extension?
+  "" Ext -> false
+  (@s C Ext) Ext -> true
+  (@s C Cs) Ext -> (file-extension? Cs Ext))
+
+(define translate-files'
+  [] S -> S
+  [File | Files] S -> (translate-files' Files (cn S (translate-file File)))
+                      where (or (file-extension? File ".kl")
+                                (file-extension? File ".shen"))
+  [File | Files] S -> (translate-files' Files
+                                        (cn S (read-file-as-string File))))
+
+(define translate-files
+  Files -> (translate-files' Files ""))
+
 (define js.dump
-  Srcdir F Dstdir -> (let D (make-string "~A~A.js" Dstdir F)
-                          S (make-string "~A~A" Srcdir F)
-                          X (read-file S)
-                          _ (if (value *silence*)
-                                _
-                                (output "== ~A -> ~A~%" S D))
-                       (dump-to-file X D)))
-
-(declare js.dump [string --> [string --> [string --> boolean]]])
-
-\* Register function js-dump as a dumper in Modulesys for all implementations
-of javascript language. Do nothing if Modulesys is not loaded *\
-
-(trap-error (register-dumper javascript all js.dump) (/. E _))
+  Files Target -> (do (write-to-file Target (translate-files Files))
+                      true))
 )
