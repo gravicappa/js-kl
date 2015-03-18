@@ -30,7 +30,7 @@
              klvm.return klvm.s2.runtime klvm.sp+ klvm.sp- klvm.tailcall
              klvm.tailif klvm.thaw klvm.toplevel klvm.wipe
 
-             shen- lb vm.]
+             shen- lb vm.$]
 
 (defstruct context
   (func symbol)
@@ -111,14 +111,14 @@
 
 (define func-name
   [klvm.native X] -> X
-  X -> (concat vm. (sym-js-from-shen X)))
+  X -> (concat vm.$ (sym-js-from-shen X)))
 
 (define external-func-name
   [klvm.native X] -> X
-  X -> (concat (protect Shen.) (sym-js-from-shen X)))
+  X -> (concat (protect Shen.$) (sym-js-from-shen X)))
 
 (define closure-name
-  Name -> (concat vm. (sym-js-from-shen Name)))
+  Name -> (concat vm.$ (sym-js-from-shen Name)))
 
 (define native
   [klvm.native X] -> X
@@ -400,7 +400,7 @@
 (set *silence* false)
 
 (define translate-file
-  File -> (let L (freeze (from-kl (kl-from-shen (read-file File))))
+  File -> (let L (freeze (from-shen (read-file File)))
             (with-global in-repl false L)))
 
 (define file-extension?
@@ -408,9 +408,18 @@
   (@s C Ext) Ext -> true
   (@s C Cs) Ext -> (file-extension? Cs Ext))
 
+(define load-sources'
+  [] Acc -> Acc
+  [F | Files] Acc -> (load-sources' Files (append Acc (read-file F)))
+                     where (or (file-extension? F ".kl")
+                               (file-extension? F ".shen"))
+  [F | Files] Acc -> (let Data (read-file-as-string F)
+                       (load-sources' Files (append Acc [klvm.native Data]))))
+
 (define translate-files'
   [] S -> S
-  [File | Files] S -> (translate-files' Files (cn S (translate-file File)))
+  [File | Files] S -> (let S' (cn S (make-string "// ~A~%"  File))
+                        (translate-files' Files (cn S' (translate-file File))))
                       where (or (file-extension? File ".kl")
                                 (file-extension? File ".shen"))
   [File | Files] S -> (translate-files' Files
