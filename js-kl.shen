@@ -117,6 +117,9 @@
   [klvm.native X] -> X
   X -> (concat (protect Shen.$) (sym-js-from-shen X)))
 
+(define block-name
+  N C -> (concat $ (sym-js-from-shen (label-sym N C))))
+
 (define closure-name
   Name -> (concat vm.$ (sym-js-from-shen Name)))
 
@@ -240,8 +243,9 @@
 (define func-entry
   F Nargs Name C Acc -> (let Args (arg-list [Nargs
                                              (esc-obj (func-obj-name Name))])
+                             N (block-name 0 C)
                           (s [Acc
-                              "  var x = vm.fn_entry(fn, " Args ");" (endl)
+                              "  var x = vm.fn_entry(" N ", " Args ");" (endl)
                               "  if (x !== vm.fail_obj) return x;"
                               (endl)
                               (func-prelude)
@@ -283,9 +287,9 @@
   X Y -> (s ["  reg[sp + " X "] = " (expr2 Y) ";" (endl)]))
 
 (define nregs->
-  [X] Acc -> (s [Acc "  vm.sp_top = " X ";" (endl)]) where (number? X)
+  [X] Acc -> (s [Acc "  vm.sp_top = sp + " X ";" (endl)]) where (number? X)
   X Acc -> (s [Acc "  var n = " (sum-expr2 X) ";" (endl)
-               "  vm.sp_top = n;" (endl)]))
+               "  vm.sp_top = sp + n;" (endl)]))
 
 (define expr1
   [klvm.entry F Nargs Name] C Acc -> (func-entry F Nargs Name C Acc)
@@ -330,7 +334,8 @@
 
 (define label
   N Code C Acc -> (let FN (external-func-name (label-sym N C))
-                    (s [Acc FN " = function fn(vm) {" (endl)
+                       Block-name (block-name N C)
+                    (s [Acc FN " = function " Block-name "(vm) {" (endl)
                         (if (= N 0)
                             ""
                             (func-prelude))
