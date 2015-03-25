@@ -6,7 +6,7 @@
                         string->n empty? error simple-error
                         error-to-string]]
                 [[X Y] | [+ - * / = > >= < <= cons set <-address
-                         cn pos @p write-byte or and]]
+                         cn pos @p write-byte or and open]]
                 [[X Y Z] | [address->]]])
 
 (define count-int-funcs'
@@ -58,6 +58,7 @@
   [<-address V I] -> (mkprim "absvector_ref" [V I])
   \\[<-address V X] -> (make-string "~A[~A]" (expr2 V) (expr2 X))
   [address-> V I X] -> (mkprim "absvector_set" [V I X])
+  [open Name Dir] -> (mkprim "open" [Name Dir])
   [read-byte X] -> (mkprim "read_byte" [X])
   [write-byte X Y] -> (mkprim "write_byte" [X Y])
   [close X] -> (make-string "~A.close()" (expr2 X))

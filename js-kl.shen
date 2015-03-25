@@ -42,7 +42,7 @@
 
 \\ Can contain {'entry', 'return'}
 (set inline [])
-(set in-repl false)
+(set evaluated? false)
 
 (define s'
   [] Acc -> Acc
@@ -360,13 +360,13 @@
                    ");" (endl)]))
 
 (define def-func
-  Name Args -> (def-func' Name Args) where (not (value in-repl))
+  Name Args -> (def-func' Name Args) where (not (value evaluated?))
   Name Args -> (s ["vm.ret = " (def-func' Name Args)]))
 
 (define call-toplevel
   Name -> (s ["vm.nargs = 0;" (endl)
-              "vm.next = " (external-func-name Name) "(vm);" (endl)])
-          where (value in-repl)
+              "toplevel_next = " (external-func-name Name) "(vm);" (endl)])
+          where (value evaluated?)
   Name -> (s ["Shen.call(" (external-func-name Name) ", []);" (endl)]))
 
 (define toplevel
@@ -388,7 +388,10 @@
   [X | Y] Acc -> (from-klvm Y (cn Acc (translate-toplevel X))))
 
 (define from-kl
-  X -> (from-klvm (klvm.s2-from-kl (function primitives) X) ""))
+  X -> (from-klvm (klvm.s2-from-kl (function primitives)
+                                   X
+                                   (not (value evaluated?)))
+                  ""))
 
 (set skip-internals true)
 
@@ -406,7 +409,7 @@
 
 (define translate-file
   File -> (let L (freeze (from-shen (read-file File)))
-            (with-global in-repl false L)))
+            (with-global evaluated? false L)))
 
 (define file-extension?
   "" Ext -> false
