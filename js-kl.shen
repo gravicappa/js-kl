@@ -450,8 +450,15 @@ w(define toplevel
   [File | Files] S -> (translate-files' Files
                                         (cn S (read-file-as-string File))))
 
+(define remove-duplicates'
+  [] Acc -> (reverse Acc)
+  [X | Xs] Acc -> (remove-duplicates' Xs (adjoin X Acc)))
+
+(define remove-duplicates
+  X -> (remove-duplicates' X []))
+
 (define translate-files
-  Files -> (translate-files' Files ""))
+  Files -> (translate-files' (remove-duplicates Files) ""))
 
 (define translate-files-to
   Files Target -> (do (write-to-file Target (translate-files Files))
