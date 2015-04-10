@@ -375,9 +375,9 @@
           where (value evaluated?)
   X -> (s ["  vm.call(" X ", []);" (endl)]))
 
-w(define toplevel
+(define toplevel
   Name Args Nregs Code -> (let S (mkfunc Name Args Nregs Code)
-                            (call-toplevel (func-name Name))))
+                            (cn S (call-toplevel (func-name Name)))))
 
 (define translate-toplevel
   \\X <- (do (output "KL: ~S~%" X) (fail))
