@@ -37,8 +37,8 @@
   [= X Y] -> (mkprim "is_equal" [X Y])
   [string? X] -> (make-string "(typeof(~A) === 'string')" (expr2 X))
   [number? X] -> (make-string "(typeof(~A) === 'number')" (expr2 X))
-  [symbol? X] -> (make-string "(~A instanceof Shen.Sym)" (expr2 X))
-  [cons? X] -> (make-string "(~A instanceof Shen.Cons)" (expr2 X))
+  [symbol? X] -> (make-string "(~A instanceof vm.Sym)" (expr2 X))
+  [cons? X] -> (make-string "(~A instanceof vm.Cons)" (expr2 X))
   [vector? X] -> (mkprim "is_vector" [X])
   [absvector? X] -> (mkprim "is_absvector" [X])
   [empty? X] -> (mkprim "is_empty" [X])
@@ -89,14 +89,13 @@
                  Nargs (length Args)
                  Args' (gen-prim-args 0 Nargs [])
                  Code (primitives [X | Args'])
-              (s ["Shen." Name " = function " Name "(vm) {" (endl)
-                  "  var x = vm.fn_entry(" Name ", " Nargs ", " X' ");" (endl)
-                  "  if (x !== vm.fail_obj) return x;" (endl)
-                  "  var reg = vm.reg, sp = vm.sp;" (endl)
-                  "  return vm.fn_return(" Code ", vm.next);" (endl)
-                  "};" (endl)
-                  "Shen.defun_x(" X' ", " Nargs ", Shen." Name ");" (endl)
-                  (endl)])))
+              (s ["  vm.defun_x(" X' ", " Nargs ", function " Name "(vm) {"
+                  (endl)
+                  "    var x = vm.fn_entry(" Name ", " Nargs ", " X' ");" (endl)
+                  "    if (x !== vm.fail_obj) return x;" (endl)
+                  "    var reg = vm.reg, sp = vm.sp;" (endl)
+                  "    return vm.fn_return(" Code ", vm.next);" (endl)
+                  "  });" (endl) (endl)])))
 
 (define generate-primitives-n
   _ [] Acc -> Acc
@@ -112,5 +111,5 @@
 (define generate-primitives
   -> (let S (s [(entry-tpl) (endl) (return-tpl)])
           S (generate-primitives' (value int-funcs) S)
-       (cn S (from-kl (klvm.runtime)))))
+       (with-global evaluated? false (freeze (from-kl' (klvm.runtime) S)))))
 )
