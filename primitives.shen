@@ -58,10 +58,12 @@
   [<-address V I] -> (mkprim "absvector_ref" [V I])
   \\[<-address V X] -> (make-string "~A[~A]" (expr2 V) (expr2 X))
   [address-> V I X] -> (mkprim "absvector_set" [V I X])
-  [open Name Dir] -> (mkprim "open" [Name Dir])
-  [read-byte X] -> (mkprim "read_byte" [X])
-  [write-byte X Y] -> (mkprim "write_byte" [X Y])
-  [close X] -> (make-string "~A.close()" (expr2 X))
+  [open Name Dir] -> (make-string "vm.io.open(~A, ~A, vm)"
+                                  (expr2 Name) (expr2 Dir))
+  [read-byte X] -> (make-string "~A.read_byte(vm)" (expr2 X))
+  [write-byte X Y] -> (make-string "~A.write_byte(~A, vm)"
+                                   (expr2 X) (expr2 Y))
+  [close X] -> (make-string "~A.close(vm)" (expr2 X))
   [error X] -> (mkprim "error" [X])
   [simple-error X] -> (mkprim "error" [X])
   [error-to-string X] -> (mkprim "error_to_string" [X])
