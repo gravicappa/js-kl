@@ -302,7 +302,7 @@
   X Acc -> (let F (esc-obj (str X))
              (s [Acc "    var func = vm.find_func(" F ");" (endl)]))
            where (symbol? X)
-  X Acc -> (s [Acc "    var func = vm.ensure_func(" (expr2 X) ");" (endl)]))
+  X Acc -> (s [Acc "    var func = " (expr2 X) ";" (endl)]))
 
 (define expr1
   [klvm.entry F Nargs Name] C Acc -> (func-entry F Nargs Name C Acc)
