@@ -44,6 +44,8 @@
 (set inline [])
 (set evaluated? false)
 
+\\# Strings and symbols conversions
+
 (define s'
   [] Acc -> Acc
   [X] Acc -> (cn Acc X) where (string? X)
@@ -109,7 +111,7 @@
   X -> (sym-js-from-shen X) where (symbol? X)
   X -> (error "Object ~S cannot be escaped" X))
 
-\* Names *\
+\\# Names
 
 (define label-sym
   0 C -> (context-func C)
@@ -135,7 +137,7 @@
   Name -> Name where (string? Name)
   Name -> (str Name))
 
-\* Expressions *\
+\\# Expressions
 
 (define native
   [klvm.native X] -> X
@@ -373,7 +375,7 @@
   X -> (s ["  vm.nargs = 0;" (endl)
             "  toplevel_next = " X "(vm);" (endl)])
           where (value evaluated?)
-  X -> (s ["  vm.call(" X ", []);" (endl)]))
+  X -> (s ["  vm.exec(" X ", []);" (endl)]))
 
 (define toplevel
   Name Args Nregs Code -> (let S (mkfunc Name Args Nregs Code)
@@ -397,7 +399,8 @@
   [X | Y] Acc -> (from-klvm Y (cn Acc (translate-toplevel X))))
 
 (define from-kl'
-  X Acc -> (from-klvm (klvm.s2-from-kl (function primitives)
+  X Acc -> (from-klvm (klvm.s2-from-kl (function denest-primitives)
+                                       (function primitives)
                                        X
                                        (not (value evaluated?)))
                       Acc))
@@ -405,7 +408,7 @@
 (define from-kl
   X -> (from-kl' X ""))
 
-(set skip-internals true)
+\\# Source translations
 
 (define kl-from-shen
   X -> (let X (shen.walk (function macroexpand) X)
@@ -462,6 +465,4 @@
 
 (define translate-files-to
   Files Target -> (do (write-to-file Target (translate-files Files))
-                      true))
-
-)
+                      true)))
