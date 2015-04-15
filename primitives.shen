@@ -79,19 +79,23 @@
   [pr X Y] -> (mkprim "write_string" [X Y])
   [fail] -> "vm.fail_obj"
 
-  \*
-  [prop | X] -> (prop X)
-  [new Class | Args] -> (new Class Args)
-  [obj | Init] -> (mk-obj Init)
-  [arr | Init] -> (mk-arr Init)
-  *\
+  [. | X] -> (ffi-chain X)
+  [js.call F | Args] -> (ffi-call F Args)
+  [js.set Dst Src] -> (ffi-set Dst Src)
+  [new Class | Args] -> (ffi-new Class Args)
+  [obj | Init] -> (ffi-obj Init)
+  [arr | Init] -> (ffi-arr Init)
+  [fn Args Fn] -> (ffi-func Args Fn)
 
   _ -> (fail))
 
 (define denest-primitives
-  [js.prop | X] -> true
+  [. | X] -> true
   [js.call | X] -> true
-  [js.new | X] -> true
+  [js.set | X] -> true
+  [new | X] -> true
+  [obj | X] -> true
+  [arr | X] -> true
   X -> false)
 
 (define gen-prim-args
@@ -127,33 +131,4 @@
 (define generate-primitives
   -> (let S (s [(entry-tpl) (endl) (return-tpl)])
           S (generate-primitives' (value int-funcs) S)
-       (with-global evaluated? false (freeze (from-kl' (klvm.runtime) S)))))
-
-\\# FFI
-
-(define prop'
-  [] R -> R
-  [[F | A] | Xs] R -> (let A' (arg-list (map (function expr2) A))
-                        (prop' Xs (make-string "~A.~A(~A)" (expr2 R) F A')))
-  [X | Xs] R -> (prop' Xs (make-string "~A.~A" R X)) where (symbol? X)
-  [X | Xs] R -> (prop' Xs (make-string "~A[~A]" R (expr2 X))))
-
-(define prop
-  [X] -> X
-  [X | Xs] -> (prop' Xs (expr2 X)))
-
-(define new
-  Class Args -> (let Args' (arg-list (map (function expr2) Args))
-                  (make-string "new ~A(~A)" (expr2 Class) Args')))
-
-(define mk-obj'
-  [] Pairs -> (s ["{" (arg-list (reverse Pairs)) "}"])
-  [K V | Items] Pairs -> (let Pair (make-string "~A: ~A" (expr2 K) (expr2 V))
-                           (mk-obj' Items [Pair | Pairs])))
-
-(define mk-obj
-  Items -> (mk-obj' Items []))
-
-(define mk-arr
-  Items -> (s ["[" (arg-list (map (function expr2) Items)) "]"]))
-)
+       (with-global evaluated? false (freeze (from-kl' (klvm.runtime) S))))))
