@@ -120,6 +120,7 @@
   [X | Xs] -> [X | (map (function normalize-ffi-macro) Xs)]
               where (element? X [. js.call js.set new obj arr])
   [X | Xs] -> [js.call | (map (function normalize-ffi-macro) [X | Xs])]
+  X -> (cut-package X) where (symbol? X)
   X -> X)
 
 (define chain-macro-fn
