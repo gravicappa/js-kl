@@ -50,8 +50,9 @@
    [klvm.lambda X] _ -> (str (func-name X))
    [klvm.func-obj Func Nargs Name] _ -> (func-obj Func Nargs Name)
    [js.quote X] _ -> X
-   [js.ffi_quote X] _ -> [js.ffi_quote X]
-   [js.ffi_atom X] _ -> [js.ffi_atom X]
+   [js.fn-args | Args] _ -> Args
+   [klvm.nargs-cond N L E G] C -> (nargs-cond N L E G C)
+   [klvm.if-nargs>0 Then Else] C -> (if-nargs>0 Then Else C)
    [fail] _ -> "vm.fail_obj"
    X _ -> (expr-obj X) where (const? X))
 
@@ -67,9 +68,9 @@
    [empty? X] _ -> (mkprim "vm.is_empty" [X])
    [function X] _ -> (mkprim "vm.find_func" [X])
    [str X] _ -> (mkprim "vm.str" [X])
-   [tlstr X] _ -> (mkprim "tlstr" [X])
-   [n->string X] _ -> (mkprim "str_from_n" [X])
-   [string->n X] _ -> (mkprim "n_from_str" [X])
+   [tlstr X] _ -> (mkprim "vm.tlstr" [X])
+   [n->string X] _ -> (mkprim "vm.str_from_n" [X])
+   [string->n X] _ -> (mkprim "vm.n_from_str" [X])
    [not X] _ -> (make-string "(!~A)" X)
    [intern X] _ -> (prim-intern X)
    [hd X] _ -> (make-string "~A.head" X)
@@ -85,9 +86,9 @@
    [read-byte X] _ -> (make-string "~A.read_byte(vm)" X)
    [write-byte X Y] _ -> (make-string "~A.write_byte(~A, vm)" X Y)
    [close X] _ -> (make-string "~A.close(vm)" X)
-   [error X] _ -> (mkprim "error" [X])
-   [simple-error X] _ -> (mkprim "error" [X])
-   [error-to-string X] _ -> (mkprim "error_to_string" [X])
+   [error X] _ -> (mkprim "vm.error" [X])
+   [simple-error X] _ -> (mkprim "vm.error" [X])
+   [error-to-string X] _ -> (mkprim "vm.error_to_string" [X])
    [cn X Y] _ -> (make-string "(~A + ~A)" X Y)
    [pos X Y] _ -> (make-string "~A[~A]" X Y)
    [@p X Y] _ -> (prim-tuple X Y)
@@ -96,7 +97,8 @@
    [or X Y] _ -> (make-string "(~A || ~A)" X Y)
    [Op X Y] _ -> (make-string "(~A ~A ~A)" X Op Y)
                  where (element? Op [+ - * / > < >= <=])
-   [pr X Y] _ -> (mkprim "write_string" [X Y])
+   [pr X Y] _ -> (mkprim "vm.write_string" [X Y])
+
    [fail] _ -> "vm.fail_obj")
 
   (subst-ffi
@@ -106,15 +108,14 @@
    [js.new Class | Args] C -> (ffi-expr [js.new Class | Args] C)
    [js.obj | Init] C -> (ffi-expr [js.obj Init] C)
    [js.arr | Init] C -> (ffi-expr [js.obj Init] C)
-   [js.fn Args Fn] C -> (ffi-expr [js.fn Args Fn] C))
+   [js.fn [js.fn-args | Args] Fn] C -> (ffi-expr [js.fn Args Fn] C)
+   )
 
   (walk
    [klvm.next-> X] C -> (@s "vm.next = " X)
    [klvm.nregs-> X] C -> (nregs-> X C)
    [klvm.return X Next] C -> (func-return X Next C)
    [klvm.if If Then Else] C -> (expr-if If Then Else C)
-   [klvm.nargs-cond N L E G] C -> (nargs-cond N L E G C)
-   [klvm.if-nargs>0 Then Else] C -> (if-nargs>0 Then Else C)
    [klvm.push-error-handler X] C -> (push-error-handler X C)
    [klvm.ret-> X] _ -> (@s "vm.ret = " X)
    [klvm.nregs-> X] C -> (nregs-> X C)
@@ -141,7 +142,7 @@
                  C (mk-context Name 0 0 0 "" [])
                  Nargs (length Args)
                  Args' (gen-prim-args 0 Nargs [])
-                 Code (prim [X | Args'])
+                 Code (expr [X | Args'] 1 C)
               (s ["  vm.defun_x(" X' ", " Nargs ", function " Name "(vm) {"
                   (endl)
                   "    var x = vm.fn_entry(" Name ", " Nargs ", " X' ");" (endl)

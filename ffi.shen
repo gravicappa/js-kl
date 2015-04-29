@@ -104,15 +104,18 @@
                                                     js.obj js.arr js.fn])))
   X -> X)
 
-(define normalize-chain
+(define chain-macro-fn
   X -> (map (function normalize-chain-item) X))
 
-(define chain-macro
-  [js. | X] -> (normalize-chain [js. | X])
-  [js.call | X] -> (normalize-chain [js.call | X])
-  [js.set | X] -> (normalize-chain [js.set | X])
-  [js.new | X] -> (normalize-chain [new | X])
-  [js.obj | X] -> (normalize-chain [obj | X])
-  [js.arr | X] -> (normalize-chain [arr | X])
-  [js.fn | X] -> (normalize-chain [fn | X])
-  X -> X))
+(define fn-macro-fn
+  [js.fn Args F] -> [js.fn [js.fn-args | Args] F]))
+
+(defmacro js.chain-macro
+  [js. | X] -> (js.chain-macro-fn [js. | X])
+  [js.call | X] -> (js.chain-macro-fn [js.call | X])
+  [js.set | X] -> (js.chain-macro-fn [js.set | X])
+  [js.new | X] -> (js.chain-macro-fn [js.new | X])
+  [js.obj | X] -> (js.chain-macro-fn [js.obj | X])
+  [js.arr | X] -> (js.chain-macro-fn [js.arr | X])
+  [js.fn [A | As] X] -> (js.fn-macro-fn [js.fn [A | As] X])
+                        where (not (= A js.fn-args)))

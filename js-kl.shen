@@ -132,13 +132,11 @@
   I C -> (block-name' I (context-func C)))
 
 (define func-name
-  [js.quote X] -> (error "FIXME: unexpected js.quote in func-name")
   [js.quote X] -> X
   X -> (block-name' 0 X))
 
 (define func-obj-name
   [] -> null
-  [js.quote X] -> (error "FIXME: unexpected js.quote in func-obj-name")
   [js.quote X] -> X
   Name -> Name where (string? Name)
   Name -> (str Name))
@@ -146,7 +144,6 @@
 \\# Expressions
 
 (define native
-  [js.quote X] -> (error "FIXME: unexpected js.quote in native")
   [js.quote X] -> X
   X -> X)
 
@@ -235,7 +232,7 @@
        (@s "  vm.fn_entry = function(func, func_arity, func_name) {" (endl)
            "    var vm = this;" (endl)
            (func-prelude) ";" (endl)
-           (exprs [Klvm] C "")
+           (expr Klvm 1 C)
            (endl) "    return vm.fail_obj;" (endl) "  };" (endl) (endl))))
 
 (define return-tpl
@@ -246,7 +243,7 @@
        (@s "  vm.fn_return = function(retval, retnext) {" (endl)
            "    var vm = this;" (endl)
            (func-prelude) ";" (endl)
-           (exprs [Klvm] C "") (endl) "  };" (endl) (endl))))
+           (expr Klvm 1 C) (endl) "  };" (endl) (endl))))
 
 (define func-entry
   F Nargs Name C -> (let Args (arg-list [Nargs
@@ -263,19 +260,20 @@
                 (@s "return vm.fn_return(" Args ")")))
 
 (define nargs-cond
-  Arity L E G C -> (@s "if (vm.nargs == " Arity ") {" (endl)
-                       E (endl)
-                       "    } else if (vm.nargs < " Arity ") {" (endl)
-                       L (endl)
-                       "    } else {" (endl)
-                       G (endl)
-                       "    }" (endl)))
+  Arity L E G C -> (let A' (expr Arity 1 C)
+                     (@s "    if (vm.nargs == " A' ") {" (endl)
+                         (exprs E C "")
+                         "    } else if (vm.nargs < " A' ") {" (endl)
+                         (exprs L C "")
+                         "    } else {" (endl)
+                         (exprs G C "")
+                         "    }")))
 
 (define if-nargs>0
-  Then Else C -> (@s "if (vm.nargs > 0) {" (endl)
-                     Then (endl)
+  Then Else C -> (@s "    if (vm.nargs > 0) {" (endl)
+                     (exprs Then C "")
                      "    } else {" (endl)
-                     Else (endl)
+                     (exprs Else C "")
                      "    }"))
 
 (define push-error-handler
