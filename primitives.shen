@@ -58,6 +58,7 @@
 
   (subst
    [] _ -> "[]"
+   [function X] _ -> (mkprim "vm.find_func" [X])
    [= X Y] _ -> (mkprim "vm.is_equal" [X Y])
    [string? X] _ -> (make-string "(typeof(~A) === 'string')" X)
    [number? X] _ -> (make-string "(typeof(~A) === 'number')" X)
@@ -66,12 +67,10 @@
    [vector? X] _ -> (mkprim "vm.is_vector" [X])
    [absvector? X] _ -> (mkprim "vm.is_absvector" [X])
    [empty? X] _ -> (mkprim "vm.is_empty" [X])
-   [function X] _ -> (mkprim "vm.find_func" [X])
    [str X] _ -> (mkprim "vm.str" [X])
    [tlstr X] _ -> (mkprim "vm.tlstr" [X])
    [n->string X] _ -> (mkprim "vm.str_from_n" [X])
    [string->n X] _ -> (mkprim "vm.n_from_str" [X])
-   [not X] _ -> (make-string "(!~A)" X)
    [intern X] _ -> (prim-intern X)
    [hd X] _ -> (make-string "~A.head" X)
    [tl X] _ -> (make-string "~A.tail" X)
@@ -93,8 +92,7 @@
    [pos X Y] _ -> (make-string "~A[~A]" X Y)
    [@p X Y] _ -> (prim-tuple X Y)
    [cons X Y] _ -> (make-string "(new vm.Cons(~A, ~A))" X Y)
-   [and X Y] _ -> (make-string "(~A && ~A)" X Y)
-   [or X Y] _ -> (make-string "(~A || ~A)" X Y)
+   [not X] _ -> (make-string "(!~A)" X)
    [Op X Y] _ -> (make-string "(~A ~A ~A)" X Op Y)
                  where (element? Op [+ - * / > < >= <=])
    [pr X Y] _ -> (mkprim "vm.write_string" [X Y])
@@ -112,6 +110,8 @@
    )
 
   (walk
+   [and X Y] _ -> (make-string "(~A && ~A)" X Y)
+   [or X Y] _ -> (make-string "(~A || ~A)" X Y)
    [klvm.next-> X] C -> (@s "vm.next = " X)
    [klvm.nregs-> X] C -> (nregs-> X C)
    [klvm.return X Next] C -> (func-return X Next C)
