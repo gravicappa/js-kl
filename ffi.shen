@@ -22,7 +22,7 @@
 (define ffi-call-args
   [] _ -> "()"
   [X] C -> (@s "(" (ffi-expr X C) ")")
-  [X | Xs] C -> (@s "(" (ffi-expr X C) (ffi-call-args' C Xs "") ")"))
+  [X | Xs] C -> (@s "(" (ffi-expr X C) (ffi-call-args' Xs C "") ")"))
 
 (define ffi-call
   F Args C -> (cn (ffi-expr F C) (ffi-call-args Args C)))
