@@ -92,9 +92,14 @@
                              (klvm-sym-str? (str X)))
   _ -> false)
 
+(define fn-macro
+  [js.fn-args | Args] F -> [js.fn [js.fn-args | Args] F]
+  Args F -> [js.fn [js.fn-args | Args] F])
+
 (define normalize-chain-item
   [] -> []
   X -> X where (klvm-expr? X)
+  [js.fn Args X] -> (fn-macro Args X)
   [X | Xs] -> [X | (map (function normalize-chain-item) Xs)]
               where (element? X [js. js.call js.set js.new js.obj js.arr
                                  js.fn])
@@ -105,10 +110,8 @@
   X -> X)
 
 (define chain-macro-fn
+  [js.fn Args X] -> (fn-macro Args X)
   X -> (map (function normalize-chain-item) X))
-
-(define fn-macro-fn
-  [js.fn Args F] -> [js.fn [js.fn-args | Args] F]))
 
 (defmacro js.chain-macro
   [js. | X] -> (js.chain-macro-fn [js. | X])
@@ -117,5 +120,4 @@
   [js.new | X] -> (js.chain-macro-fn [js.new | X])
   [js.obj | X] -> (js.chain-macro-fn [js.obj | X])
   [js.arr | X] -> (js.chain-macro-fn [js.arr | X])
-  [js.fn [A | As] X] -> (js.fn-macro-fn [js.fn [A | As] X])
-                        where (not (= A js.fn-args)))
+  [js.fn | X] -> (js.chain-macro-fn [js.fn | X])))
