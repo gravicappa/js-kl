@@ -20,7 +20,7 @@
                 [[X Y Z] | [address->]]])
 
 (define mkprim
-  Name Args -> (@s Name "(" (arg-list Args) ")"))
+  Name Args -> (s [Name "(" (arg-list Args) ")"]))
 
 (define prim-intern
   "true" -> "true"
@@ -33,7 +33,7 @@
 (klvm.define-primitives prim
   (skip
    [klvm.entry F Nargs Name] C -> (func-entry F Nargs Name C)
-   [klvm.goto L] C -> (@s "return " (str (block-name L C)))
+   [klvm.goto L] C -> (s ["return " (str (block-name L C))])
    [klvm.goto-next] C -> "return vm.next"
    [klvm.call] C -> "return func.fn"
    [klvm.call lambda] C -> "return func"
@@ -42,7 +42,7 @@
    [klvm.ret] _ -> "vm.ret"
    [klvm.pop-error-handler] _ -> "vm.error_handlers.pop()"
    [klvm.put-closure-args] C -> (put-closure-args C)
-   [klvm.next-> X] C -> (@s "vm.next = " (next-val X C)) where (number? X)
+   [klvm.next-> X] C -> (s ["vm.next = " (next-val X C)]) where (number? X)
    [klvm.closure-> X] C -> (closure-> X C)
    [klvm.closure-nargs] _ -> "func.vars.length"
    [klvm.reg 0] _ -> "reg[sp]"
@@ -106,29 +106,28 @@
    [js.new Class | Args] C -> (ffi-expr [js.new Class | Args] C)
    [js.obj | Init] C -> (ffi-expr [js.obj Init] C)
    [js.arr | Init] C -> (ffi-expr [js.obj Init] C)
-   [js.fn [js.fn-args | Args] Fn] C -> (ffi-expr [js.fn Args Fn] C)
-   )
+   [js.' Js] C -> Js)
 
   (walk
    [and X Y] _ -> (make-string "(~A && ~A)" X Y)
    [or X Y] _ -> (make-string "(~A || ~A)" X Y)
-   [klvm.next-> X] C -> (@s "vm.next = " X)
+   [klvm.next-> X] C -> (s ["vm.next = " X])
    [klvm.nregs-> X] C -> (nregs-> X C)
    [klvm.return X Next] C -> (func-return X Next C)
    [klvm.if If Then Else] C -> (expr-if If Then Else C)
    [klvm.push-error-handler X] C -> (push-error-handler X C)
-   [klvm.ret-> X] _ -> (@s "vm.ret = " X)
+   [klvm.ret-> X] _ -> (s ["vm.ret = " X])
    [klvm.nregs-> X] C -> (nregs-> X C)
-   [klvm.sp+ X] _ -> (@s "sp += " X ";" (endl)
-                         "    vm.sp = sp")
-   [klvm.sp- X] _ -> (@s "sp -= " X ";" (endl)
-                         "    vm.sp = sp")
-   [klvm.nargs-> X] _ -> (@s "vm.nargs = " X)
-   [klvm.nargs+ X] _ -> (@s "vm.nargs += " X)
-   [klvm.nargs- X] _ -> (@s "vm.nargs -= " X)
+   [klvm.sp+ X] _ -> (s ["sp += " X ";" (endl)
+                         "    vm.sp = sp"])
+   [klvm.sp- X] _ -> (s ["sp -= " X ";" (endl)
+                         "    vm.sp = sp"])
+   [klvm.nargs-> X] _ -> (s ["vm.nargs = " X])
+   [klvm.nargs+ X] _ -> (s ["vm.nargs += " X])
+   [klvm.nargs- X] _ -> (s ["vm.nargs -= " X])
    \\[klvm.wipe X] _ -> "reg.length = sp + vm.sp_top"
    [klvm.wipe X] _ -> ""
-   [klvm.reg N] _ -> (@s "reg[sp + " N "]")
+   [klvm.reg N] _ -> (s ["reg[sp + " N "]"])
 
    _ _ -> (fail)))
 

@@ -17,15 +17,15 @@
 
 (define ffi-call-args'
   [] _ R -> R
-  [X | Xs] C R -> (ffi-call-args' Xs C (@s R ", " (ffi-expr X C))))
+  [X | Xs] C R -> (ffi-call-args' Xs C (s [R ", " (ffi-expr X C)])))
 
 (define ffi-call-args
   [] _ -> "()"
-  [X] C -> (@s "(" (ffi-expr X C) ")")
-  [X | Xs] C -> (@s "(" (ffi-expr X C) (ffi-call-args' Xs C "") ")"))
+  [X] C -> (s ["(" (ffi-expr X C) ")"])
+  [X | Xs] C -> (s ["(" (ffi-expr X C) (ffi-call-args' Xs C "") ")"]))
 
 (define ffi-call
-  F Args C -> (cn (ffi-expr F C) (ffi-call-args Args C)))
+  F Args C -> (s ["(" (ffi-expr F C) ")" (ffi-call-args Args C)]))
 
 (define ffi-new
   Class Args C -> (cn "new " (ffi-call Class Args C)))
@@ -35,43 +35,28 @@
   X -> (error "~A is not appropriate js object key" X))
 
 (define ffi-obj'
-  [] _ Pairs -> (@s "{" (arg-list (reverse Pairs)) "}")
-  [K V | Items] C Pairs -> (let Pair (@s (ffi-obj-key K) ": " (ffi-expr V C))
+  [] _ Pairs -> (s ["{" (arg-list (reverse Pairs)) "}"])
+  [K V | Items] C Pairs -> (let Pair (s [(ffi-obj-key K) ": " (ffi-expr V C)])
                              (ffi-obj' Items C [Pair | Pairs])))
 
 (define ffi-obj
   Items C -> (ffi-obj' Items C []))
 
 (define ffi-arr
-  Items C -> (@s "[" (arg-list (map (/. X (ffi-expr X C)) Items)) "]"))
+  Items C -> (s ["[" (arg-list (map (/. X (ffi-expr X C)) Items)) "]"]))
 
 (define ffi-set
-  Dst Src C -> (@s "(" (ffi-expr Dst C) " = " (ffi-expr Src C) ")" ))
+  Dst Src C -> (s ["(" (ffi-expr Dst C) " = " (ffi-expr Src C) ")"]))
 
 (define ffi-chain-item
-  X C R -> (@s R "." (item X C)) where (symbol? X)
-  X C R -> (@s R "[" (ffi-expr X C) "]"))
+  X C R -> (s [R "." (item X C)]) where (symbol? X)
+  X C R -> (s [R "[" (ffi-expr X C) "]"]))
 
 (define ffi-chain
   [] _ R -> R
   [[js.call F | A] | Xs] C R -> (ffi-chain Xs C (cn (ffi-chain-item F C R)
                                                     (ffi-call-args A C)))
   [X | Xs] C R -> (ffi-chain Xs C (ffi-chain-item X C R)))
-
-(define ffi-func-obj
-  F _ -> (esc-obj (str F)) where (symbol? F)
-  [function F] _ -> (esc-obj (str F)) where (symbol? F)
-  F C -> (expr F 1 C))
-
-(define ffi-func'
-  Js-args F Shen-args C -> (@s "function(" (arg-list Js-args)
-                               ") {return vm.call(" (ffi-func-obj F C) ", ["
-                               (arg-list Shen-args) "]);}"))
-
-(define ffi-func
-  [X | Args] F C -> (ffi-func' Args F [this | Args] C)
-                  where (= (cut-package X) this)
-  Args F C -> (ffi-func' Args F Args C))
 
 (define ffi-expr
   [js. X | Xs] C -> (ffi-chain Xs C (ffi-expr X C))
@@ -80,44 +65,4 @@
   [js.new Class | Args] C -> (ffi-new Class Args C)
   [js.obj | Xs] C -> (ffi-obj Xs C)
   [js.arr | Xs] C -> (ffi-arr Xs C)
-  [js.fn Args F] C -> (ffi-func Args F C)
-  X C -> (item X C))
-
-(define klvm-sym-str?
-  (@s "klvm." X) -> true
-  _ -> false)
-
-(define klvm-expr?
-  [X | Y] -> true where (and (symbol? X)
-                             (klvm-sym-str? (str X)))
-  _ -> false)
-
-(define fn-macro
-  [js.fn-args | Args] F -> [js.fn [js.fn-args | Args] F]
-  Args F -> [js.fn [js.fn-args | Args] F])
-
-(define normalize-chain-item
-  [] -> []
-  X -> X where (klvm-expr? X)
-  [js.fn Args X] -> (fn-macro Args X)
-  [X | Xs] -> [X | (map (function normalize-chain-item) Xs)]
-              where (element? X [js. js.call js.set js.new js.obj js.arr
-                                 js.fn])
-  [X | Xs] -> [js.call | (map (function normalize-chain-item) [X | Xs])]
-  X -> (cut-package X) where (and (symbol? X)
-                                  (not (element? X [js. js.call js.set js.new
-                                                    js.obj js.arr js.fn])))
-  X -> X)
-
-(define chain-macro-fn
-  [js.fn Args X] -> (fn-macro Args X)
-  X -> (map (function normalize-chain-item) X))
-
-(defmacro js.chain-macro
-  [js. | X] -> (js.chain-macro-fn [js. | X])
-  [js.call | X] -> (js.chain-macro-fn [js.call | X])
-  [js.set | X] -> (js.chain-macro-fn [js.set | X])
-  [js.new | X] -> (js.chain-macro-fn [js.new | X])
-  [js.obj | X] -> (js.chain-macro-fn [js.obj | X])
-  [js.arr | X] -> (js.chain-macro-fn [js.arr | X])
-  [js.fn | X] -> (js.chain-macro-fn [js.fn | X])))
+  X C -> (item X C)))

@@ -183,7 +183,7 @@
 
 (define lambda-obj
   Func Arity -> (let Args ["undefined" (native Arity) (func-name Func)]
-                  (s ["new Shen.Func(" (arg-list Args) ")"])))
+                  (s ["new vm.Func(" (arg-list Args) ")"])))
 
 (define expr2
   [klvm.closure-nargs] -> "func.vars.length"
@@ -201,11 +201,11 @@
   X -> (expr-obj X))
 
 (define expr-if
-  If Then Else C -> (@s "if (" If ") {" (endl)
+  If Then Else C -> (s ["if (" If ") {" (endl)
                         "      " Then ";" (endl)
                         "    } else {" (endl)
                         "      " Else ";" (endl)
-                        "    }"))
+                        "    }"]))
 
 (define unwind-protect
   Thunk Restore -> (trap-error (let R (thaw Thunk)
@@ -229,55 +229,55 @@
                                     [js.quote "func_name"])
           \\. (output "KLVM: ~S~%" Klvm)
           C (mk-context [js.quote "name"] func_arity 0 0 "" [entry])
-       (@s "  vm.fn_entry = function(func, func_arity, func_name) {" (endl)
+       (s ["  vm.fn_entry = function(func, func_arity, func_name) {" (endl)
            "    var vm = this;" (endl)
            (func-prelude) ";" (endl)
            (expr Klvm 1 C)
-           (endl) "    return vm.fail_obj;" (endl) "  };" (endl) (endl))))
+           (endl) "    return vm.fail_obj;" (endl) "  };" (endl) (endl)])))
 
 (define return-tpl
   -> (let Klvm (klvm.return-template [js.quote "retval"]
                                      [js.quote "retnext"])
           \\. (output "KLVM: ~S~%" Klvm)
           C (mk-context [js.quote "name"] func_nargs 0 0 "" [return])
-       (@s "  vm.fn_return = function(retval, retnext) {" (endl)
+       (s ["  vm.fn_return = function(retval, retnext) {" (endl)
            "    var vm = this;" (endl)
            (func-prelude) ";" (endl)
-           (expr Klvm 1 C) (endl) "  };" (endl) (endl))))
+           (expr Klvm 1 C) (endl) "  };" (endl) (endl)])))
 
 (define func-entry
   F Nargs Name C -> (let Args (arg-list [Nargs
                                          (esc-obj (func-obj-name Name))])
                          N (str (block-name 0 C))
-                      (@s "var x = vm.fn_entry(" N ", " Args ");"
+                      (s ["var x = vm.fn_entry(" N ", " Args ");"
                           (endl)
                           "    if (x !== vm.fail_obj) return x;"
                           (endl)
-                          (func-prelude))))
+                          (func-prelude)])))
 
 (define func-return
-  X Next _ -> (let Args (arg-list [X (@s "reg[sp + " Next "]")])
-                (@s "return vm.fn_return(" Args ")")))
+  X Next _ -> (let Args (arg-list [X (s ["reg[sp + " Next "]"])])
+                (s ["return vm.fn_return(" Args ")"])))
 
 (define nargs-cond
   Arity L E G C -> (let A' (expr Arity 1 C)
-                     (@s "    if (vm.nargs == " A' ") {" (endl)
+                     (s ["    if (vm.nargs == " A' ") {" (endl)
                          (exprs E C "")
                          "    } else if (vm.nargs < " A' ") {" (endl)
                          (exprs L C "")
                          "    } else {" (endl)
                          (exprs G C "")
-                         "    }")))
+                         "    }"])))
 
 (define if-nargs>0
-  Then Else C -> (@s "    if (vm.nargs > 0) {" (endl)
+  Then Else C -> (s ["    if (vm.nargs > 0) {" (endl)
                      (exprs Then C "")
                      "    } else {" (endl)
                      (exprs Else C "")
-                     "    }"))
+                     "    }"]))
 
 (define push-error-handler
-  X C -> (@s "vm.push_error_handler(" X ")"))
+  X C -> (s ["vm.push_error_handler(" X ")"]))
 
 (define put-closure-args
   C -> "vm.put_closure_args(func)")
@@ -287,22 +287,22 @@
   X C -> (prim X C))
 
 (define reg->
-  0 Y C -> (@s "reg[sp] = " (expr Y 1 C))
-  X Y C -> (@s "reg[sp + " (expr X 1 C) "] = " (expr Y 1 C)))
+  0 Y C -> (s ["reg[sp] = " (expr Y 1 C)])
+  X Y C -> (s ["reg[sp + " (expr X 1 C) "] = " (expr Y 1 C)]))
 
 (define nregs->
-  X C -> (@s "var n = " X ";" (endl) "    vm.sp_top = sp + n"))
+  X C -> (s ["var n = " X ";" (endl) "    vm.sp_top = sp + n"]))
 
 (define closure->
-  [klvm.lambda X] C -> (@s "var func = " (prim [klvm.lambda X] C))
+  [klvm.lambda X] C -> (s ["var func = " (prim [klvm.lambda X] C)])
   X _ -> (let F (esc-obj (str X))
-             (@s "var func = vm.find_func(" F ")"))
+             (s ["var func = vm.find_func(" F ")"]))
            where (symbol? X)
-  X C -> (@s "var func = " (expr X 1 C)))
+  X C -> (s ["var func = " (expr X 1 C)]))
 
 (define statement
   "" -> ""
-  S -> (@s "    " S ";" (endl)))
+  S -> (s ["    " S ";" (endl)]))
 
 (define expr'
   C X 0 -> (statement (prim X C))
@@ -316,12 +316,12 @@
   [X | Xs] C Acc -> (exprs Xs C (cn Acc (expr X 0 C))))
 
 (define label
-  N Code C Acc -> (@s Acc "  function " (str (block-name N C)) "(vm) {" (endl)
+  N Code C Acc -> (s [Acc "  function " (str (block-name N C)) "(vm) {" (endl)
                       (if (= N 0)
                           ""
-                          (@s (func-prelude) ";" (endl)))
+                          (s [(func-prelude) ";" (endl)]))
                       (exprs Code C "")
-                      "  }" (endl) (endl)))
+                      "  }" (endl) (endl)]))
 
 (define labels
   [] _ Acc -> Acc
@@ -348,7 +348,7 @@
   X -> (s ["  vm.nargs = 0;" (endl)
             "  toplevel_next = " X "(vm);" (endl)])
           where (value evaluated?)
-  X -> (s ["  vm.exec(" X ", []);" (endl)]))
+  X -> (s ["  vm.call_toplevel(" X ", []);" (endl)]))
 
 (define toplevel
   Name Args Nregs Code -> (let S (mkfunc Name Args Nregs Code)
@@ -368,7 +368,7 @@
 
 (define from-klvm
   [] Acc -> (js-toplevel Acc "vm") where (value evaluated?)
-  [] Acc -> (js-toplevel Acc "Shen")
+  [] Acc -> (js-toplevel Acc "shen")
   [X | Y] Acc -> (from-klvm Y (cn Acc (translate-toplevel X))))
 
 (define from-kl'
