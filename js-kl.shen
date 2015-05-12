@@ -392,6 +392,9 @@
 (define from-shen
   X -> (from-kl (kl-from-shen X)))
 
+(define from-string
+  X -> (from-kl (kl-from-shen (read-from-string X))))
+
 (set *silence* false)
 
 (define read-shen
@@ -399,7 +402,7 @@
                                       (read-file File)))
             (freeze (shen.add-macro shen.function-macro))))
 
-(define translate-file
+(define from-file
   File -> (let L (freeze (from-shen (read-file File)))
             (with-global evaluated? false L)))
 
@@ -416,14 +419,13 @@
   [F | Files] Acc -> (let Data (read-file-as-string F)
                        (load-sources' Files (append Acc [js.quote Data]))))
 
-(define translate-files'
+(define from-files'
   [] S -> S
   [File | Files] S -> (let S' (cn S (make-string "// ~A~%"  File))
-                        (translate-files' Files (cn S' (translate-file File))))
+                        (from-files' Files (cn S' (from-file File))))
                       where (or (file-extension? File ".kl")
                                 (file-extension? File ".shen"))
-  [File | Files] S -> (translate-files' Files
-                                        (cn S (read-file-as-string File))))
+  [File | Files] S -> (from-files' Files (cn S (read-file-as-string File))))
 
 (define remove-duplicates'
   [] Acc -> (reverse Acc)
@@ -432,9 +434,9 @@
 (define remove-duplicates
   X -> (remove-duplicates' X []))
 
-(define translate-files
-  Files -> (translate-files' (remove-duplicates Files) ""))
+(define from-files
+  Files -> (from-files' (remove-duplicates Files) ""))
 
-(define translate-files-to
-  Files Target -> (do (write-to-file Target (translate-files Files))
+(define save-from-files
+  Files Target -> (do (write-to-file Target (from-files Files))
                       true)))
