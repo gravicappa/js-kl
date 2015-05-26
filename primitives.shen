@@ -10,13 +10,12 @@
              klvm.tailif klvm.thaw klvm.toplevel klvm.wipe
              ]
 
-(set int-funcs [[[X] | [hd tl not string? number? symbol? cons?
-                        vector? absvector? value intern vector
-                        read-byte close absvector str tlstr n->string
-                        string->n empty? error simple-error
+(set int-funcs [[[X] | [hd tl not string? number? symbol? cons? vector?
+                        absvector? value intern vector close absvector str
+                        tlstr n->string string->n empty? error simple-error
                         error-to-string]]
-                [[X Y] | [+ - * / = > >= < <= cons set <-address
-                         cn pos @p write-byte or and open]]
+                [[X Y] | [+ - * / = > >= < <= cons set <-address cn pos @p or
+                         and]]
                 [[X Y Z] | [address->]]])
 
 (define mkprim
@@ -50,7 +49,6 @@
    [klvm.lambda X] _ -> (str (func-name X))
    [klvm.func-obj Func Nargs Name] _ -> (func-obj Func Nargs Name)
    [js.quote X] _ -> X
-   [js.fn-args | Args] _ -> Args
    [klvm.nargs-cond N L E G] C -> (nargs-cond N L E G C)
    [klvm.if-nargs>0 Then Else] C -> (if-nargs>0 Then Else C)
    [fail] _ -> "vm.fail_obj"
@@ -81,9 +79,6 @@
    [<-address V I] _ -> (mkprim "vm.absvector_ref" [V I])
    \\[<-address V X] _ -> (make-string "~A[~A]" V X)
    [address-> V I X] _ -> (mkprim "vm.absvector_set" [V I X])
-   [open Name Dir] _ -> (make-string "vm.io.open(~A, ~A, vm)" Name Dir)
-   [read-byte X] _ -> (make-string "~A.read_byte(vm)" X)
-   [write-byte X Y] _ -> (make-string "~A.write_byte(~A, vm)" X Y)
    [close X] _ -> (make-string "~A.close(vm)" X)
    [error X] _ -> (mkprim "vm.error" [X])
    [simple-error X] _ -> (mkprim "vm.error" [X])
@@ -91,7 +86,6 @@
    [cn X Y] _ -> (make-string "(~A + ~A)" X Y)
    [pos X Y] _ -> (make-string "~A[~A]" X Y)
    [@p X Y] _ -> (prim-tuple X Y)
-   [cons X Y] _ -> (make-string "(new vm.Cons(~A, ~A))" X Y)
    [not X] _ -> (make-string "(!~A)" X)
    [Op X Y] _ -> (make-string "(~A ~A ~A)" X Op Y)
                  where (element? Op [+ - * / > < >= <=])
@@ -111,6 +105,7 @@
   (walk
    [and X Y] _ -> (make-string "(~A && ~A)" X Y)
    [or X Y] _ -> (make-string "(~A || ~A)" X Y)
+   [cons X Y] _ -> (make-string "(new vm.Cons(~A, ~A))" X Y)
    [klvm.next-> X] C -> (s ["vm.next = " X])
    [klvm.nregs-> X] C -> (nregs-> X C)
    [klvm.return X Next] C -> (func-return X Next C)

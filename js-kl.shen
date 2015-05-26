@@ -40,8 +40,7 @@
   (toplevel string)
   (inline (list symbol)))
 
-\\ Can contain {'entry', 'return'}
-(set inline [])
+(define inline -> [])
 (set evaluated? false)
 
 \\# Strings and symbols conversions
@@ -330,7 +329,7 @@
 (define mkfunc
   Name Args Nregs Labels ->
   (let Nargs (length Args)
-       C (mk-context Name Nargs Nregs 0 "" (value inline))
+       C (mk-context Name Nargs Nregs 0 "" (inline))
     (labels Labels C "")))
     
 
@@ -346,19 +345,24 @@
 
 (define call-toplevel
   X -> (s ["  vm.nargs = 0;" (endl)
-            "  toplevel_next = " X "(vm);" (endl)])
+           "  toplevel_next = " X "(vm);" (endl)])
           where (value evaluated?)
-  X -> (s ["  vm.call_toplevel(" X ", []);" (endl)]))
+  X -> (s ["  vm.call_toplevel(" X ");" (endl)]))
 
 (define toplevel
   Name Args Nregs Code -> (let S (mkfunc Name Args Nregs Code)
                             (cn S (call-toplevel (func-name Name)))))
 
+(define reg-lambda
+  Name -> (s ["  vm.reg_lambda(" (str (block-name' 0 Name)) ");" (endl)
+              (endl)]))
+
 (define translate-toplevel
   \\X <- (do (output "KL: ~S~%" X) (fail))
   \\X <- (do (klvm.dbg.show-code [X]) (fail))
   
-  [klvm.closure Name Args Nregs Code] -> (mkfunc Name Args Nregs Code)
+  [klvm.closure Name Args Nregs Code] -> (s [(mkfunc Name Args Nregs Code)
+                                             (reg-lambda Name)])
   [klvm.toplevel Name Args Nregs Code] -> (toplevel Name Args Nregs Code)
   [klvm.func Name Args Nregs Code] -> (s [(mkfunc Name Args Nregs Code) (endl)
                                           (def-func Name Args) (endl)]))
@@ -367,7 +371,7 @@
   X Vm -> (s ["(function(vm) {" (endl) X "})(" Vm ");" (endl) (endl)]))
 
 (define from-klvm
-  [] Acc -> (js-toplevel Acc "vm") where (value evaluated?)
+  [] Acc -> Acc where (value evaluated?)
   [] Acc -> (js-toplevel Acc "shen")
   [X | Y] Acc -> (from-klvm Y (cn Acc (translate-toplevel X))))
 
@@ -404,7 +408,10 @@
 
 (define from-file
   File -> (let L (freeze (from-shen (read-file File)))
-            (with-global evaluated? false L)))
+            (with-global evaluated? false L))
+          where (or (file-extension? File ".kl")
+                    (file-extension? File ".shen"))
+  File -> (read-file-as-string File))
 
 (define file-extension?
   "" Ext -> false
@@ -437,6 +444,14 @@
 (define from-files
   Files -> (from-files' (remove-duplicates Files) ""))
 
+(define save-from-files'
+  [] F -> true
+  [File | Files] F -> (let . (pr (from-file File) F)
+                        (save-from-files' Files F)))
+
 (define save-from-files
-  Files Target -> (do (write-to-file Target (from-files Files))
-                      true)))
+  Files Target -> (let F (open Target out)
+                       Files' (remove-duplicates Files)
+                    (unwind-protect 
+                      (freeze (save-from-files' Files' F))
+                      (freeze (close F))))))
