@@ -98,8 +98,8 @@
    [js.call F | Args] C -> (ffi-expr [js.call  F | Args] C)
    [js.set Dst Src] C -> (ffi-expr [js.set Dst Src] C)
    [js.new Class | Args] C -> (ffi-expr [js.new Class | Args] C)
-   [js.obj | Init] C -> (ffi-expr [js.obj Init] C)
-   [js.arr | Init] C -> (ffi-expr [js.arr Init] C)
+   [js.obj | Init] C -> (ffi-expr [js.obj | Init] C)
+   [js.arr | Init] C -> (ffi-expr [js.arr | Init] C)
    [js.' Js] C -> Js)
 
   (walk
